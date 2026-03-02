@@ -42,6 +42,10 @@ export async function registerRoutes(
     res.json(threat);
   });
 
+  app.get("/api/attack-patterns", (_req, res) => {
+    res.json(pipeline.attackPatterns);
+  });
+
   app.get("/api/responses", (_req, res) => {
     const responses = [...pipeline.responseActions].reverse();
     res.json(responses);

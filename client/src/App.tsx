@@ -15,6 +15,7 @@ import Identity from "@/pages/identity";
 import Threats from "@/pages/threats";
 import Responses from "@/pages/responses";
 import Pipeline from "@/pages/pipeline";
+import AttackPatternsPage from "@/pages/attack-patterns";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/events" component={Events} />
       <Route path="/identity" component={Identity} />
       <Route path="/threats" component={Threats} />
+      <Route path="/attack-patterns" component={AttackPatternsPage} />
       <Route path="/responses" component={Responses} />
       <Route path="/pipeline" component={Pipeline} />
       <Route component={NotFound} />

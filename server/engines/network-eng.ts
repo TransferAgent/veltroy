@@ -171,6 +171,13 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
 
   const communityId = computeCommunityId(srcIp, srcPort, dstIp, dstPort, protocolNumber(proto));
 
+  const srcBytes = randInt(64, 1048576);
+  const dstBytes = randInt(64, 1048576);
+  const srcPackets = randInt(1, 5000);
+  const dstPackets = randInt(1, 5000);
+  const duration = randInt(100, 300000000);
+  const riskScore = isAlert ? parseFloat((severity / 100 * 100).toFixed(1)) : parseFloat((Math.random() * 20).toFixed(1));
+
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
     agent: { name: "zeek", type: "zeek", version: "6.0.4" },
@@ -187,11 +194,15 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
       module: "zeek",
       dataset: ECS_DATASET_CONN,
       created: now,
+      duration,
+      risk_score: riskScore,
       ...(isAlert ? { action: randItem(RULE_NAMES) } : {}),
     },
     source: {
       ip: srcIp,
       port: srcPort,
+      bytes: srcBytes,
+      packets: srcPackets,
       ...(direction === "ingress" && Math.random() < 0.6
         ? { geo: { country_name: randItem(COUNTRIES) } }
         : {}),
@@ -199,15 +210,24 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
     destination: {
       ip: dstIp,
       port: dstPort,
+      bytes: dstBytes,
+      packets: dstPackets,
     },
     network: {
       protocol: proto,
+      transport: proto === "icmp" ? "icmp" : proto,
       direction,
-      bytes: randInt(64, 2097152),
+      bytes: srcBytes + dstBytes,
+      packets: srcPackets + dstPackets,
       community_id: communityId,
+      type: "ipv4",
     },
     related: {
       ip: [srcIp, dstIp],
+    },
+    labels: {
+      sensor_id: "ndr-sensor-01",
+      pipeline_version: NDR_BLUEPRINT_VER,
     },
     zeek: {
       uid,
@@ -241,6 +261,9 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
   const responseCode = isSuspicious ? randItem(["NXDOMAIN", "SERVFAIL"]) : randItem(DNS_RESPONSE_CODES);
 
   const communityId = computeCommunityId(srcIp, srcPort, dstIp, 53, 17);
+  const srcBytes = randInt(40, 256);
+  const dstBytes = randInt(40, 512);
+  const riskScore = isSuspicious ? parseFloat((severity / 100 * 100).toFixed(1)) : parseFloat((Math.random() * 10).toFixed(1));
 
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
@@ -258,24 +281,37 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
       module: "zeek",
       dataset: ECS_DATASET_DNS,
       created: now,
+      duration: randInt(1000, 50000000),
+      risk_score: riskScore,
       ...(isSuspicious ? { action: randItem(["DNS Tunneling Suspected", "Known Bad Domain Query", "DGA Domain Detected"]) } : {}),
     },
     source: {
       ip: srcIp,
       port: srcPort,
+      bytes: srcBytes,
+      packets: 1,
     },
     destination: {
       ip: dstIp,
       port: 53,
+      bytes: dstBytes,
+      packets: 1,
     },
     network: {
       protocol: "udp",
+      transport: "udp",
       direction: isRFC1918(srcIp) && isRFC1918(dstIp) ? "internal" : isRFC1918(srcIp) ? "egress" : "ingress",
-      bytes: randInt(40, 512),
+      bytes: srcBytes + dstBytes,
+      packets: 2,
       community_id: communityId,
+      type: "ipv4",
     },
     related: {
       ip: [srcIp, dstIp],
+    },
+    labels: {
+      sensor_id: "ndr-sensor-01",
+      pipeline_version: NDR_BLUEPRINT_VER,
     },
     dns: {
       type: queryType,
@@ -330,6 +366,9 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
     isRFC1918(srcIp) ? "egress" : "ingress";
 
   const communityId = computeCommunityId(srcIp, srcPort, dstIp, dstPort, 6);
+  const reqBytes = randInt(100, 10240);
+  const respBytes = randInt(200, 1048576);
+  const riskScore = isSuspicious ? parseFloat((severity / 100 * 100).toFixed(1)) : parseFloat((Math.random() * 15).toFixed(1));
 
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
@@ -347,11 +386,15 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
       module: "zeek",
       dataset: ECS_DATASET_HTTP,
       created: now,
+      duration: randInt(5000, 120000000),
+      risk_score: riskScore,
       ...(isSuspicious ? { action: randItem(["Web Application Attack", "Path Traversal Attempt", "Suspicious Upload"]) } : {}),
     },
     source: {
       ip: srcIp,
       port: srcPort,
+      bytes: reqBytes,
+      packets: randInt(1, 100),
       ...(direction === "ingress" && Math.random() < 0.5
         ? { geo: { country_name: randItem(COUNTRIES) } }
         : {}),
@@ -359,15 +402,24 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
     destination: {
       ip: dstIp,
       port: dstPort,
+      bytes: respBytes,
+      packets: randInt(1, 200),
     },
     network: {
       protocol: "tcp",
+      transport: "tcp",
       direction,
-      bytes: randInt(200, 524288),
+      bytes: reqBytes + respBytes,
+      packets: randInt(2, 300),
       community_id: communityId,
+      type: "ipv4",
     },
     related: {
       ip: [srcIp, dstIp],
+    },
+    labels: {
+      sensor_id: "ndr-sensor-01",
+      pipeline_version: NDR_BLUEPRINT_VER,
     },
     url: {
       full: `${scheme}://${host}${path}`,
@@ -378,11 +430,11 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
     http: {
       request: {
         method,
-        bytes: randInt(100, 10240),
+        bytes: reqBytes,
       },
       response: {
         status_code: statusCode,
-        bytes: randInt(200, 1048576),
+        bytes: respBytes,
       },
       version: randItem(["1.1", "2.0"]),
     },

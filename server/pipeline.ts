@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type {
   NetworkEvent,
   IdentityEvent,
+  AttackPattern,
   Correlation,
   ResponseAction,
   PipelineMetric,
@@ -10,6 +11,7 @@ import type {
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 import { generateTrafficBatch } from "./engines/network-eng";
 import { generateIdentityBatch } from "./engines/identity-eng";
+import { seedAttackPatterns, linkCommunityIds } from "./engines/correlation-eng";
 
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
@@ -63,6 +65,7 @@ function internalIP(): string {
 export class NDRPipeline {
   networkEvents: NetworkEvent[] = [];
   identityEvents: IdentityEvent[] = [];
+  attackPatterns: AttackPattern[] = [];
   correlations: Correlation[] = [];
   responseActions: ResponseAction[] = [];
   pipelineMetrics: PipelineMetric[] = [];
@@ -84,6 +87,13 @@ export class NDRPipeline {
 
     const seedIdentity = generateIdentityBatch(10);
     this.identityEvents.push(...seedIdentity);
+
+    this.attackPatterns = seedAttackPatterns();
+    const communityIds = this.networkEvents
+      .map((e) => e.network.community_id)
+      .filter(Boolean) as string[];
+    linkCommunityIds(this.attackPatterns, communityIds);
+
     for (let i = 0; i < 5; i++) {
       this.runCorrelation();
     }
@@ -167,6 +177,16 @@ export class NDRPipeline {
     if (this.identityEvents.length > 200) {
       this.identityEvents = this.identityEvents.slice(-200);
     }
+
+    if (Math.random() < 0.1) {
+      const communityIds = this.networkEvents
+        .slice(-50)
+        .map((e) => e.network.community_id)
+        .filter(Boolean) as string[];
+      if (communityIds.length > 0) {
+        linkCommunityIds(this.attackPatterns, communityIds);
+      }
+    }
   }
 
   private runCorrelation() {
@@ -179,6 +199,10 @@ export class NDRPipeline {
       .slice(-10)
       .filter(() => Math.random() < 0.4)
       .map((e) => e.id);
+
+    const matchedPattern = this.attackPatterns.find(
+      (p) => p.mitre_technique_id === technique.id
+    );
 
     const correlation: Correlation = {
       id: randomUUID(),
@@ -194,6 +218,7 @@ export class NDRPipeline {
         technique: { name: technique.name, id: technique.id },
       },
       related_events: relatedIds.length > 0 ? relatedIds : [randomUUID()],
+      matched_pattern_id: matchedPattern?.pattern_id,
       severity,
       status: randItem(["new", "new", "investigating"] as const),
     };
@@ -330,6 +355,7 @@ export class NDRPipeline {
       pipelineStatus,
       logSourceBreakdown,
       identitySourceBreakdown,
+      attackPatternCount: this.attackPatterns.length,
     };
   }
 }

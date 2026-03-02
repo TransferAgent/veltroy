@@ -163,10 +163,15 @@ export function generateLinuxAuthEvent(forceAlert = false): IdentityEvent {
         },
       } : {}),
     },
-    host: { hostname },
+    host: { hostname, ip: internalIP() },
     log: { file: { path: logPath } },
     message: desc,
     related: { ip: [sourceIp], user: [userName] },
+    labels: {
+      identity_provider: "wazuh",
+      mfa_used: false,
+      risk_score: parseFloat((wazuhRuleLevelToSeverity(template.ruleLevel) / 100 * 1).toFixed(2)),
+    },
     ndr: { blueprint_version: NDR_BLUEPRINT_VER },
   };
 }
@@ -223,10 +228,15 @@ export function generateWindowsSecurityEvent(forceAlert = false): IdentityEvent 
         },
       } : {}),
     },
-    host: { hostname },
+    host: { hostname, ip: internalIP() },
     log: { file: { path: `Security` } },
     message: `${template.desc}. Subject: ${domain}\\${userName}. Logon Type: ${logonType || "N/A"}`,
     related: { ip: [sourceIp], user: [userName] },
+    labels: {
+      identity_provider: "active_directory",
+      mfa_used: Math.random() < 0.3,
+      risk_score: parseFloat((severity / 100).toFixed(2)),
+    },
     winlog: {
       event_id: template.eventId,
       channel: "Security",
@@ -296,7 +306,15 @@ export function generateCloudTrailEvent(forceAlert = false): IdentityEvent {
       region,
     },
     related: { ip: [sourceIp], user: [userName] },
-    user_agent: { original: randItem(AWS_USER_AGENTS) },
+    user_agent: {
+      original: randItem(AWS_USER_AGENTS),
+      name: randItem(["aws-cli", "console", "boto3", "lambda", "signin"]),
+    },
+    labels: {
+      identity_provider: "aws_iam",
+      mfa_used: Math.random() < 0.4,
+      risk_score: parseFloat((Math.min(100, severity) / 100).toFixed(2)),
+    },
     ndr: { blueprint_version: NDR_BLUEPRINT_VER },
   };
 }

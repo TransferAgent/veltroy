@@ -116,6 +116,15 @@ function ThreatCard({ threat }: { threat: Correlation }) {
           </div>
         </div>
 
+        {threat.matched_pattern_id && (
+          <div className="flex items-center gap-1.5 rounded bg-accent/30 px-2 py-1">
+            <span className="text-[10px] text-muted-foreground">Pattern:</span>
+            <Badge variant="outline" className="text-[9px] font-mono px-1.5 py-0 h-4" data-testid={`badge-pattern-${threat.id}`}>
+              {threat.matched_pattern_id}
+            </Badge>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2 pt-1 border-t">
           <div className="flex items-center gap-1.5">
             <Badge

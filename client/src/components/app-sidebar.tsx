@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   Network,
   ShieldAlert,
+  BrainCircuit,
   Zap,
   Activity,
   Shield,
@@ -29,6 +30,7 @@ const navItems = [
   { title: "Network Events", url: "/events", icon: Network },
   { title: "Identity Logs", url: "/identity", icon: UserCheck },
   { title: "Threat Correlations", url: "/threats", icon: ShieldAlert },
+  { title: "Attack Patterns", url: "/attack-patterns", icon: BrainCircuit },
   { title: "Response Actions", url: "/responses", icon: Zap },
   { title: "Pipeline Monitor", url: "/pipeline", icon: Activity },
 ];
@@ -84,6 +86,11 @@ export function AppSidebar() {
                       {item.title === "Threat Correlations" && stats && stats.activeThreats > 0 && (
                         <Badge variant="destructive" className="ml-auto text-[10px] px-1.5 py-0 min-h-0 h-4">
                           {stats.activeThreats}
+                        </Badge>
+                      )}
+                      {item.title === "Attack Patterns" && stats && stats.attackPatternCount > 0 && (
+                        <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 min-h-0 h-4">
+                          {stats.attackPatternCount}
                         </Badge>
                       )}
                     </a>

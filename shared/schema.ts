@@ -40,27 +40,53 @@ export const networkEventSchema = ecsBaseSchema.extend({
     dataset: z.string(),
     created: z.string(),
     action: z.string().optional(),
+    duration: z.number().optional(),
+    risk_score: z.number().optional(),
   }),
   source: z.object({
     ip: z.string(),
     port: z.number(),
+    bytes: z.number().optional(),
+    packets: z.number().optional(),
     geo: z.object({
-      country_name: z.string(),
+      country_name: z.string().optional(),
+      country_iso_code: z.string().optional(),
+      city_name: z.string().optional(),
+      location: z.object({
+        lat: z.number(),
+        lon: z.number(),
+      }).optional(),
     }).optional(),
   }),
   destination: z.object({
     ip: z.string(),
     port: z.number(),
+    bytes: z.number().optional(),
+    packets: z.number().optional(),
+    geo: z.object({
+      country_iso_code: z.string(),
+      city_name: z.string().optional(),
+      location: z.object({
+        lat: z.number(),
+        lon: z.number(),
+      }).optional(),
+    }).optional(),
   }),
   network: z.object({
     protocol: z.string(),
+    transport: z.string().optional(),
     direction: z.enum(["ingress", "egress", "internal"]),
     bytes: z.number(),
+    packets: z.number().optional(),
     community_id: z.string().optional(),
+    type: z.string().optional(),
   }),
   host: z.object({
     name: z.string(),
     ip: z.array(z.string()),
+    os: z.object({
+      name: z.string(),
+    }).optional(),
   }).optional(),
   related: z.object({
     ip: z.array(z.string()),
@@ -68,6 +94,16 @@ export const networkEventSchema = ecsBaseSchema.extend({
   rule: z.object({
     name: z.string(),
     id: z.string(),
+  }).optional(),
+  threat: z.object({
+    indicator: z.string().optional(),
+    technique: z.object({
+      id: z.string(),
+    }).optional(),
+  }).optional(),
+  labels: z.object({
+    sensor_id: z.string().optional(),
+    pipeline_version: z.string().optional(),
   }).optional(),
   dns: z.object({
     type: z.string(),
@@ -128,6 +164,8 @@ export const identityEventSchema = ecsBaseSchema.extend({
   }),
   user: z.object({
     name: z.string(),
+    full_name: z.string().optional(),
+    email: z.string().optional(),
     domain: z.string().optional(),
     roles: z.array(z.string()).optional(),
     type: z.string().optional(),
@@ -140,10 +178,15 @@ export const identityEventSchema = ecsBaseSchema.extend({
       country_name: z.string(),
       country_iso_code: z.string().optional(),
       city_name: z.string().optional(),
+      location: z.object({
+        lat: z.number(),
+        lon: z.number(),
+      }).optional(),
     }).optional(),
   }),
   host: z.object({
     hostname: z.string(),
+    ip: z.string().optional(),
   }).optional(),
   log: z.object({
     file: z.object({
@@ -164,11 +207,17 @@ export const identityEventSchema = ecsBaseSchema.extend({
   }).optional(),
   user_agent: z.object({
     original: z.string(),
+    name: z.string().optional(),
   }).optional(),
   winlog: z.object({
     event_id: z.number(),
     channel: z.string(),
     logon_type: z.number().optional(),
+  }).optional(),
+  labels: z.object({
+    identity_provider: z.string().optional(),
+    mfa_used: z.boolean().optional(),
+    risk_score: z.number().optional(),
   }).optional(),
   ndr: z.object({
     blueprint_version: z.string(),
@@ -176,6 +225,23 @@ export const identityEventSchema = ecsBaseSchema.extend({
 });
 
 export type IdentityEvent = z.infer<typeof identityEventSchema>;
+
+export const attackPatternSchema = z.object({
+  "@timestamp": z.string(),
+  pattern_id: z.string(),
+  pattern_name: z.string(),
+  description: z.string(),
+  mitre_technique_id: z.string(),
+  mitre_tactic: z.string(),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  confidence_score: z.number().min(0).max(1),
+  related_community_ids: z.array(z.string()),
+  ioc_tags: z.array(z.string()),
+  raw_pattern_text: z.string(),
+  pattern_embedding: z.array(z.number()).optional(),
+});
+
+export type AttackPattern = z.infer<typeof attackPatternSchema>;
 
 export const threatStatusEnum = z.enum(["new", "investigating", "resolved", "false_positive"]);
 
@@ -199,6 +265,7 @@ export const correlationSchema = z.object({
     }),
   }),
   related_events: z.array(z.string()),
+  matched_pattern_id: z.string().optional(),
   severity: z.number().min(0).max(100),
   status: threatStatusEnum,
 });
@@ -252,6 +319,7 @@ export interface DashboardStats {
   pipelineStatus: "healthy" | "degraded" | "critical";
   logSourceBreakdown: { source: string; count: number }[];
   identitySourceBreakdown: { source: string; count: number }[];
+  attackPatternCount: number;
 }
 
 export interface PipelineStatus {
