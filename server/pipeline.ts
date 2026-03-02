@@ -8,18 +8,11 @@ import type {
   PipelineStatus,
 } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
-import { generateTrafficBatch, generateConnLog, generateDnsLog, generateHttpLog } from "./engines/network-eng";
+import { generateTrafficBatch } from "./engines/network-eng";
+import { generateIdentityBatch } from "./engines/identity-eng";
 
-const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
-const DOMAINS = ["corp.local", "prod.internal", "dev.local", "staging.net"];
-const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-  "curl/7.88.1",
-  "Python-urllib/3.11",
-  "PowerShell/7.3",
-  "Go-http-client/2.0",
-];
+const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
 
 const MITRE_TACTICS = [
   { name: "Reconnaissance", id: "TA0043" },
@@ -89,9 +82,8 @@ export class NDRPipeline {
     const seedEvents = generateTrafficBatch(20);
     this.networkEvents.push(...seedEvents);
 
-    for (let i = 0; i < 10; i++) {
-      this.generateIdentityEvent();
-    }
+    const seedIdentity = generateIdentityBatch(10);
+    this.identityEvents.push(...seedIdentity);
     for (let i = 0; i < 5; i++) {
       this.runCorrelation();
     }
@@ -134,9 +126,8 @@ export class NDRPipeline {
 
     const identityStart = Date.now();
     const identityCount = randInt(1, 3);
-    for (let i = 0; i < identityCount; i++) {
-      this.generateIdentityEvent();
-    }
+    const newIdentity = generateIdentityBatch(identityCount);
+    this.identityEvents.push(...newIdentity);
     const identityMs = Date.now() - identityStart + randInt(100, 800);
 
     const correlationStart = Date.now();
@@ -176,48 +167,6 @@ export class NDRPipeline {
     if (this.identityEvents.length > 200) {
       this.identityEvents = this.identityEvents.slice(-200);
     }
-  }
-
-  private generateIdentityEvent() {
-    const isFailed = Math.random() < 0.3;
-    const actions = [
-      "user_login", "user_logout", "password_change",
-      "mfa_challenge", "privilege_escalation", "account_lockout", "session_created",
-    ];
-    const now = new Date().toISOString();
-    const eventId = randomUUID();
-    const userName = randItem(USERS);
-    const sourceIp = Math.random() < 0.6 ? internalIP() : randIP();
-
-    const event: IdentityEvent = {
-      ...ECS_BASE,
-      id: eventId,
-      "@timestamp": now,
-      event: {
-        id: eventId,
-        kind: isFailed ? "alert" : "event",
-        category: ["authentication"],
-        type: [isFailed ? "denied" : "allowed"],
-        outcome: isFailed ? "failure" : "success",
-        action: randItem(actions),
-        module: "ndr-identity-engine",
-        dataset: "ndr.identity",
-        created: now,
-      },
-      user: {
-        name: userName,
-        domain: randItem(DOMAINS),
-        roles: [randItem(["admin", "user", "service", "readonly", "operator"])],
-      },
-      source: {
-        ip: sourceIp,
-        ...(Math.random() < 0.5 ? { geo: { country_name: randItem(COUNTRIES) } } : {}),
-      },
-      related: { ip: [sourceIp], user: [userName] },
-      user_agent: { original: randItem(USER_AGENTS) },
-    };
-
-    this.identityEvents.push(event);
   }
 
   private runCorrelation() {
@@ -358,6 +307,12 @@ export class NDRPipeline {
       { source: "zeek.http", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.http").length },
     ];
 
+    const identitySourceBreakdown = [
+      { source: "wazuh.linux", count: this.identityEvents.filter((e) => e.event.dataset === "wazuh.linux").length },
+      { source: "wazuh.windows", count: this.identityEvents.filter((e) => e.event.dataset === "wazuh.windows").length },
+      { source: "aws.cloudtrail", count: this.identityEvents.filter((e) => e.event.dataset === "aws.cloudtrail").length },
+    ];
+
     const status = this.getStatus();
     const pipelineStatus: "healthy" | "degraded" | "critical" =
       status.sla_compliance_pct >= 95 ? "healthy" :
@@ -374,6 +329,7 @@ export class NDRPipeline {
       severityDistribution: sevDist,
       pipelineStatus,
       logSourceBreakdown,
+      identitySourceBreakdown,
     };
   }
 }

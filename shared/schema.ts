@@ -3,7 +3,11 @@ import { z } from "zod";
 export const ECS_VERSION = "8.11.0";
 export const NDR_BLUEPRINT_VER = "v1.2";
 
-export const ecsDatasetEnum = z.enum(["zeek.conn", "zeek.dns", "zeek.http", "ndr.identity", "ndr.correlation", "ndr.response"]);
+export const ecsDatasetEnum = z.enum([
+  "zeek.conn", "zeek.dns", "zeek.http",
+  "wazuh.linux", "wazuh.windows", "aws.cloudtrail",
+  "ndr.correlation", "ndr.response",
+]);
 
 const ecsBaseSchema = z.object({
   ecs: z.object({
@@ -118,24 +122,56 @@ export const identityEventSchema = ecsBaseSchema.extend({
     module: z.string(),
     dataset: z.string(),
     created: z.string(),
+    severity: z.number().optional(),
+    reason: z.string().optional(),
+    provider: z.string().optional(),
   }),
   user: z.object({
     name: z.string(),
     domain: z.string().optional(),
     roles: z.array(z.string()).optional(),
+    type: z.string().optional(),
+    id: z.string().optional(),
   }),
   source: z.object({
     ip: z.string(),
+    port: z.number().optional(),
     geo: z.object({
       country_name: z.string(),
+      country_iso_code: z.string().optional(),
+      city_name: z.string().optional(),
     }).optional(),
   }),
+  host: z.object({
+    hostname: z.string(),
+  }).optional(),
+  log: z.object({
+    file: z.object({
+      path: z.string(),
+    }),
+  }).optional(),
+  cloud: z.object({
+    provider: z.string(),
+    account: z.object({
+      id: z.string(),
+    }).optional(),
+    region: z.string().optional(),
+  }).optional(),
+  message: z.string().optional(),
   related: z.object({
     ip: z.array(z.string()),
     user: z.array(z.string()),
   }).optional(),
   user_agent: z.object({
     original: z.string(),
+  }).optional(),
+  winlog: z.object({
+    event_id: z.number(),
+    channel: z.string(),
+    logon_type: z.number().optional(),
+  }).optional(),
+  ndr: z.object({
+    blueprint_version: z.string(),
   }).optional(),
 });
 
@@ -215,6 +251,7 @@ export interface DashboardStats {
   severityDistribution: { range: string; count: number }[];
   pipelineStatus: "healthy" | "degraded" | "critical";
   logSourceBreakdown: { source: string; count: number }[];
+  identitySourceBreakdown: { source: string; count: number }[];
 }
 
 export interface PipelineStatus {
