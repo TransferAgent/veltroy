@@ -661,30 +661,53 @@ export default function KineticPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <FileJson className="h-4 w-4 text-primary" />
-                <CardTitle className="text-sm">Interface Contract v1.2</CardTitle>
+                <CardTitle className="text-sm">Signed Interface Contract v1.2</CardTitle>
               </div>
               <p className="text-xs text-muted-foreground">
-                11-field payload schema — defines what Engineer 3 dispatch surface sends to Engineer 4 kinetic layer
+                {contract ? String((contract as any).description) : "14-field signed JSON Schema — Eng3 ↔ Eng4 inbound alert payload contract"}
               </p>
+              {contract && (
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant="outline" className="text-[9px] font-mono">{String((contract as any)["$id"])}</Badge>
+                  <Badge variant="outline" className="text-[9px] font-mono">draft-07</Badge>
+                  <Badge variant="outline" className="text-[9px] font-mono">additionalProperties: false</Badge>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {contract ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {(contract.fields as { name: string; required: boolean }[] || []).map((field) => (
-                      <div
-                        key={field.name}
-                        className="flex items-center justify-between rounded-md border px-3 py-2"
-                        data-testid={`field-${field.name}`}
-                      >
-                        <span className="text-xs font-mono">{field.name}</span>
-                        {field.required ? (
-                          <Badge variant="destructive" className="text-[10px]">REQUIRED</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px]">optional</Badge>
-                        )}
-                      </div>
-                    ))}
+                    {(contract.fields as { name: string; required: boolean }[] || []).map((field) => {
+                      const props = contract.properties as Record<string, any> || {};
+                      const prop = props[field.name];
+                      return (
+                        <div
+                          key={field.name}
+                          className="flex items-start justify-between rounded-md border px-3 py-2 gap-2"
+                          data-testid={`field-${field.name}`}
+                        >
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-xs font-mono font-semibold">{field.name}</span>
+                            {prop && (
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-[9px] text-muted-foreground">{prop.type}</span>
+                                {prop.format && <Badge variant="secondary" className="text-[8px] h-4">format: {prop.format}</Badge>}
+                                {prop.pattern && <Badge variant="secondary" className="text-[8px] h-4 font-mono">{prop.pattern}</Badge>}
+                                {prop.enum && <Badge variant="secondary" className="text-[8px] h-4">{prop.enum.join(" | ")}</Badge>}
+                                {prop.minLength !== undefined && <Badge variant="secondary" className="text-[8px] h-4">min: {prop.minLength}</Badge>}
+                                {prop.description && <span className="text-[9px] text-muted-foreground italic">{prop.description}</span>}
+                              </div>
+                            )}
+                          </div>
+                          {field.required ? (
+                            <Badge variant="destructive" className="text-[10px] shrink-0">REQUIRED</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px] shrink-0">optional</Badge>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="space-y-2">

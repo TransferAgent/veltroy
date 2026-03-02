@@ -24,33 +24,41 @@ interface InterfaceContractPayload {
   host_id: string;
   alert_type: string;
   severity: string;
-  admin_session_active: boolean;
   aws_security_group_id: string;
   iam_user: string;
+  iam_access_key_id: string;
+  aws_region: string;
+  admin_session_active: boolean;
+  alert_timestamp: string;
   eng3_correlation_id: string;
-  network_community_id: string;
-  destination_ip: string;
-  destination_port: number;
+  sigma_rule_id?: string;
+  mitre_tactic?: string;
+  mitre_technique?: string;
 }
 
-const INTERFACE_CONTRACT_FIELDS = [
+const INTERFACE_CONTRACT_REQUIRED = [
   "host_ip",
   "host_id",
   "alert_type",
   "severity",
-  "admin_session_active",
   "aws_security_group_id",
   "iam_user",
+  "iam_access_key_id",
+  "aws_region",
+  "admin_session_active",
+  "alert_timestamp",
   "eng3_correlation_id",
-  "network_community_id",
-  "destination_ip",
-  "destination_port",
+] as const;
+
+const INTERFACE_CONTRACT_OPTIONAL = [
+  "sigma_rule_id",
+  "mitre_tactic",
+  "mitre_technique",
 ] as const;
 
 function validateInterfaceContract(payload: Record<string, unknown>): { valid: boolean; missing: string[] } {
-  const required: string[] = ["host_ip", "alert_type", "severity", "aws_security_group_id", "iam_user"];
   const missing: string[] = [];
-  for (const field of required) {
+  for (const field of INTERFACE_CONTRACT_REQUIRED) {
     if (payload[field] === undefined || payload[field] === null) {
       missing.push(field);
     }
@@ -136,20 +144,21 @@ export function processDispatchSurface(
       continue;
     }
 
-    const adminSessionActive = Math.random() < 0.4;
-
     const payload: InterfaceContractPayload = {
       host_ip: entry.host_ip,
-      host_id: entry.host_id || `host-${entry.host_ip.replace(/\./g, "-")}`,
+      host_id: entry.host_id,
       alert_type: entry.alert_type,
       severity: entry.severity,
-      admin_session_active: adminSessionActive,
-      aws_security_group_id: entry.aws_security_group_id || `sg-${Math.random().toString(36).slice(2, 10)}`,
-      iam_user: entry.iam_user || entry.user_name || "unknown",
+      aws_security_group_id: entry.aws_security_group_id,
+      iam_user: entry.iam_user,
+      iam_access_key_id: entry.iam_access_key_id,
+      aws_region: entry.aws_region,
+      admin_session_active: entry.admin_session_active,
+      alert_timestamp: entry.alert_timestamp,
       eng3_correlation_id: entry.eng3_correlation_id,
-      network_community_id: entry.network_community_id || "",
-      destination_ip: entry.destination_ip,
-      destination_port: entry.destination_port,
+      sigma_rule_id: entry.sigma_rule_id,
+      mitre_tactic: entry.mitre_tactic,
+      mitre_technique: entry.mitre_technique,
     };
 
     const validation = validateInterfaceContract(payload as unknown as Record<string, unknown>);
@@ -280,7 +289,7 @@ export function processKL002FromDispatch(
     const dedupeKey = `${iamUser}|${entry.eng3_correlation_id}`;
     if (processedKL002Users.has(dedupeKey)) continue;
 
-    const accessKeyId = generateFakeAccessKeyId();
+    const accessKeyId = entry.iam_access_key_id || generateFakeAccessKeyId();
     const tsStart = Date.now();
     const now = new Date();
     const durationMs = Math.floor(Math.random() * 3500) + 500;
@@ -326,7 +335,7 @@ export function processKL002FromDispatch(
       state: "COMPLETE",
       iam_user: iamUser,
       access_key_id_masked: maskAccessKeyId(accessKeyId),
-      region: "us-east-1",
+      region: entry.aws_region || "us-east-1",
       dry_run: false,
       sweep_all_keys: true,
       actions_taken: actionsTaken,
@@ -475,13 +484,33 @@ export function executeRollback(
 
 export function getInterfaceContractSchema(): object {
   return {
-    schema_id: "ndr-eng4-interface-contract-v1.2",
-    version: "1.2",
-    description: "Interface Contract JSON Schema — defines the 11-field payload Engineer 3 dispatch surface sends to Engineer 4 kinetic layer",
-    fields: INTERFACE_CONTRACT_FIELDS.map((f) => ({
-      name: f,
-      required: ["host_ip", "alert_type", "severity", "aws_security_group_id", "iam_user"].includes(f),
-    })),
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "ndr-platform/kinetic-layer/inbound-alert/v1.2",
+    title: "KL Inbound Alert Payload",
+    description: "Signed contract between Engineer 3 (Data Layer) and Engineer 4 (Kinetic Layer). Both parties must validate against this schema before production go-live.",
+    type: "object",
+    required: [...INTERFACE_CONTRACT_REQUIRED],
+    properties: {
+      host_ip:               { type: "string", format: "ipv4" },
+      host_id:               { type: "string", minLength: 1 },
+      alert_type:            { type: "string", enum: ["C2_BEACON", "LATERAL_MOVEMENT", "AUTH_SPIKE", "AWS_CONSOLE_ANOMALY", "DATA_EXFIL"] },
+      severity:              { type: "string", enum: ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+      aws_security_group_id: { type: "string", pattern: "^sg-[0-9a-f]{8,17}$" },
+      iam_user:              { type: "string", minLength: 1 },
+      iam_access_key_id:     { type: "string", pattern: "^AKIA[0-9A-Z]{16}$" },
+      aws_region:            { type: "string", pattern: "^[a-z]{2}-[a-z]+-[0-9]$" },
+      admin_session_active:  { type: "boolean" },
+      alert_timestamp:       { type: "string", format: "date-time" },
+      eng3_correlation_id:   { type: "string", minLength: 8, description: "Eng3 internal ID for cross-system audit correlation" },
+      sigma_rule_id:         { type: "string", description: "Optional — Sigma rule that fired" },
+      mitre_tactic:          { type: "string", description: "Optional — MITRE ATT&CK tactic" },
+      mitre_technique:       { type: "string", description: "Optional — MITRE ATT&CK technique ID" },
+    },
+    additionalProperties: false,
+    fields: [
+      ...INTERFACE_CONTRACT_REQUIRED.map((f) => ({ name: f, required: true })),
+      ...INTERFACE_CONTRACT_OPTIONAL.map((f) => ({ name: f, required: false })),
+    ],
     tier_classification: {
       TIER_0_SUPPRESS: "Low/Medium severity, non-beacon, no session — no action taken",
       TIER_1_ISOLATE: "C2_BEACON detected (session state irrelevant) OR HIGH severity — full isolation",

@@ -41,7 +41,7 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
     - **Sigma Rule Engine**: Five production Sigma rules (C2_BEACON, LATERAL_MOVE, BRUTE_FORCE_SUCCESS, SUSPICIOUS_IAM_KEY_ROTATION, HOST_CARDINALITY_SPIKE) with full evaluation logic and Interface Contract binding. `HOST_CARDINALITY_SPIKE` implements Kinetic Law #2 for context escalation.
     - **DBT Models**: `ndr_network_identity_join` (Master JOIN on source.ip ±5 min), `ndr_host_cardinality_60m` (Vectra Killer engine for rolling 60min unique dest count), and `ndr_eng4_dispatch_surface` (filters critical/high alerts for Eng4).
 - **Engineer 4 (Automated Response - Kinetic Layer)**:
-    - **KL-001 Automated Host Isolation**: Tier-based circuit breaker, bidirectional security group isolation, IAM kill switch, atomic pre-commit audit with execution state machine (PENDING → IN_PROGRESS → COMPLETE). Defines an 11-field Interface Contract v1.2.
+    - **KL-001 Automated Host Isolation**: Tier-based circuit breaker, bidirectional security group isolation, IAM kill switch, atomic pre-commit audit with execution state machine (PENDING → IN_PROGRESS → COMPLETE). Signed Interface Contract v1.2 (draft-07 JSON Schema, 14 fields: 11 required + 3 optional, additionalProperties: false, strict patterns for sg-id/AKIA key/aws-region).
     - **KL-002 IAM Kill Switch**: Standalone IAM credential containment with a target SLA of < 5 seconds for key deactivation, triggered by specific IAM-related alerts. Includes actions like IAM key deactivation, enumeration, deny policy attachment, and session invalidation.
     - **KL-ROLLBACK-001 Rollback Protocol**: Human-gated operation to reverse actions from KL-001 or KL-002, supporting dry run mode and tracking 5 rollback actions.
 
