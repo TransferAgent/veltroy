@@ -1,0 +1,100 @@
+[
+  {
+    "@timestamp": "2025-03-02T14:22:31.004Z",
+    "event": { "kind": "event", "category": "network", "type": "connection", "dataset": "zeek.conn", "duration": 3452109000 },
+    "source": { "ip": "10.0.1.45", "port": 54312, "bytes": 8421, "packets": 12 },
+    "destination": { "ip": "93.184.216.34", "port": 443, "bytes": 45820, "packets": 27 },
+    "network": { "transport": "tcp", "protocol": "ssl", "community_id": "1:mFnSqJdPl+...", "direction": "egress" },
+    "zeek": { "session_id": "CfKnFb3TYqzX1234aB", "conn_state": "SF", "history": "ShADadFf" },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:31.117Z",
+    "event": { "kind": "event", "category": "network", "type": "lookup", "dataset": "zeek.dns" },
+    "source": { "ip": "10.0.1.45", "port": 53201 },
+    "destination": { "ip": "8.8.8.8", "port": 53 },
+    "dns": { "id": 37291, "op_code": "QUERY", "type": "answer", "question": { "name": "telemetry.badactor.io", "type": "A", "class": "IN" }, "answers": [{ "type": "A", "ttl": 60, "data": "93.184.216.34" }], "response_code": "NOERROR" },
+    "network": { "transport": "udp", "community_id": "1:xKqP2LmNvB+...", "direction": "egress" },
+    "zeek": { "session_id": "DhLmGc4UZrwY5678cD", "rejected": false },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:32.210Z",
+    "event": { "kind": "event", "category": "web", "type": "access", "dataset": "zeek.http" },
+    "source": { "ip": "10.0.1.45", "port": 54313 },
+    "destination": { "ip": "93.184.216.34", "port": 80 },
+    "http": { "request": { "method": "POST", "body": { "bytes": 512 } }, "response": { "status_code": 200, "body": { "bytes": 128 } }, "version": "1.1" },
+    "url": { "full": "http://telemetry.badactor.io/c2/check-in", "domain": "telemetry.badactor.io", "path": "/c2/check-in", "scheme": "http" },
+    "user_agent": { "original": "Mozilla/5.0 (compatible; MSIE 9.0; WinNT)" },
+    "network": { "community_id": "1:mFnSqJdPl+..." },
+    "zeek": { "session_id": "EiMnHd5VAswZ6789eF", "proxied": false, "tags": ["post_body_capture"] },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:25:00.001Z",
+    "event": { "kind": "alert", "category": "intrusion_detection", "type": "indicator", "dataset": "zeek.ndr_beacon", "risk_score": 91.4 },
+    "source": { "ip": "10.0.1.45" },
+    "destination": { "ip": "93.184.216.34", "port": 443 },
+    "zeek": { "ndr_beacon": { "connection_count": 48, "avg_interval_sec": 300.12, "jitter_score": 0.086, "risk_score": 91.4 } },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_behavioral", "sensor": "zeek", "signal_type": "beacon_detected" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:29.800Z",
+    "event": { "kind": "event", "category": "network", "type": "connection", "dataset": "zeek.conn" },
+    "source": { "ip": "10.0.2.11", "port": 49201, "bytes": 240, "packets": 4 },
+    "destination": { "ip": "10.0.0.1", "port": 53, "bytes": 480, "packets": 4 },
+    "network": { "transport": "udp", "protocol": "dns", "community_id": "1:aZqWp3XmYr+...", "direction": "ingress" },
+    "zeek": { "session_id": "FjNoIe6WBtxA7890gH", "conn_state": "S0", "history": "D" },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:33.550Z",
+    "event": { "kind": "event", "category": "web", "type": "access", "dataset": "zeek.http" },
+    "source": { "ip": "10.0.3.88", "port": 51100 },
+    "destination": { "ip": "104.21.10.200", "port": 80 },
+    "http": { "request": { "method": "GET" }, "response": { "status_code": 301, "body": { "bytes": 0 } }, "version": "1.1" },
+    "url": { "full": "http://cdn.legitimate-cdn.net/assets/lib.js", "domain": "cdn.legitimate-cdn.net", "path": "/assets/lib.js" },
+    "user_agent": { "original": "curl/7.85.0" },
+    "zeek": { "session_id": "GkOpJf7XCuyB8901hI", "tags": ["potential_tool_user_agent"] },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:34.001Z",
+    "event": { "kind": "event", "category": "network", "type": "lookup", "dataset": "zeek.dns" },
+    "source": { "ip": "10.0.3.88", "port": 45210 },
+    "destination": { "ip": "1.1.1.1", "port": 53 },
+    "dns": { "id": 19823, "op_code": "QUERY", "question": { "name": "xn--80aaifmgl1c.xn--p1ai", "type": "TXT", "class": "IN" }, "answers": [], "response_code": "NXDOMAIN" },
+    "network": { "transport": "udp", "direction": "egress" },
+    "zeek": { "session_id": "HlPqKg8YDvzC9012iJ", "rejected": false },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek", "flag": "idn_homograph_candidate" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:35.711Z",
+    "event": { "kind": "event", "category": "network", "type": "connection", "dataset": "zeek.conn", "duration": 7200000000000 },
+    "source": { "ip": "10.0.4.200", "port": 62000, "bytes": 3100000, "packets": 4100 },
+    "destination": { "ip": "52.87.133.44", "port": 443, "bytes": 88000, "packets": 1200 },
+    "network": { "transport": "tcp", "protocol": "ssl", "community_id": "1:bTrVq4YnZs+...", "direction": "egress" },
+    "zeek": { "session_id": "ImQrLh9ZEwaD0123jK", "conn_state": "S1", "history": "ShAd", "tags": ["long_duration", "high_bytes_out"] },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_behavioral", "sensor": "zeek", "signal_type": "high_cardinality_conn" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:36.900Z",
+    "event": { "kind": "alert", "category": "intrusion_detection", "type": "indicator", "dataset": "zeek.ndr_suricata_bridge" },
+    "source": { "ip": "10.0.1.45", "port": 54312 },
+    "destination": { "ip": "93.184.216.34", "port": 443 },
+    "rule": { "id": "2027758", "name": "ET MALWARE Generic C2 Beacon Check-In", "category": "Malware Command and Control" },
+    "network": { "community_id": "1:mFnSqJdPl+..." },
+    "zeek": { "session_id": "CfKnFb3TYqzX1234aB" },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier2_confirmation", "sensor": "suricata", "correlated_zeek_uid": "CfKnFb3TYqzX1234aB" }
+  },
+  {
+    "@timestamp": "2025-03-02T14:22:38.005Z",
+    "event": { "kind": "event", "category": "network", "type": "lookup", "dataset": "zeek.dns" },
+    "source": { "ip": "10.0.2.55", "port": 44800 },
+    "destination": { "ip": "8.8.4.4", "port": 53 },
+    "dns": { "id": 54021, "op_code": "QUERY", "question": { "name": "a1b2c3d4e5f6.dyn-resolve.net", "type": "A", "class": "IN" }, "answers": [{ "type": "A", "ttl": 30, "data": "185.220.101.45" }], "response_code": "NOERROR" },
+    "network": { "transport": "udp", "direction": "egress" },
+    "zeek": { "session_id": "JnRsMe0AFxbE1234kL" },
+    "labels": { "blueprint_version": "v1.2", "tier": "tier1_primary", "sensor": "zeek", "flag": "dga_candidate", "entropy_score": 4.21 }
+  }
+]
