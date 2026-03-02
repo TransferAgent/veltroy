@@ -96,5 +96,23 @@ export async function registerRoutes(
     res.json(getInterfaceContractSchema());
   });
 
+  app.get("/api/rollback-executions", (_req, res) => {
+    const executions = [...pipeline.rollbackExecutions].reverse();
+    res.json(executions);
+  });
+
+  app.post("/api/rollback", (req, res) => {
+    const { original_execution_id, authorized_by, dry_run } = req.body;
+    if (!original_execution_id || typeof original_execution_id !== "string") {
+      return res.status(400).json({ error: "original_execution_id is required" });
+    }
+    if (!authorized_by || typeof authorized_by !== "string" || authorized_by.length < 2) {
+      return res.status(400).json({ error: "authorized_by is required (min 2 chars)" });
+    }
+    const isDryRun = dry_run !== false;
+    const result = pipeline.triggerRollback(original_execution_id, authorized_by, isDryRun);
+    res.json(result);
+  });
+
   return httpServer;
 }

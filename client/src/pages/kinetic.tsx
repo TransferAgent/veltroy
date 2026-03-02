@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,8 +32,11 @@ import {
   Brain,
   Bell,
   FileJson,
+  RotateCcw,
 } from "lucide-react";
-import type { KineticExecution, KL002Execution } from "@shared/schema";
+import type { KineticExecution, KL002Execution, RollbackExecution } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const tierConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   TIER_0_SUPPRESS: { label: "SUPPRESS", color: "bg-muted text-muted-foreground", icon: ShieldOff },
@@ -49,6 +54,10 @@ const stateColors: Record<string, string> = {
 
 export default function KineticPage() {
   const [tierFilter, setTierFilter] = useState<string>("all");
+  const [rollbackExecId, setRollbackExecId] = useState("");
+  const [rollbackAuthorizer, setRollbackAuthorizer] = useState("");
+  const [rollbackDryRun, setRollbackDryRun] = useState(true);
+  const { toast } = useToast();
 
   const { data: executions, isLoading } = useQuery<KineticExecution[]>({
     queryKey: ["/api/kinetic-executions"],
@@ -62,6 +71,30 @@ export default function KineticPage() {
 
   const { data: contract } = useQuery<Record<string, unknown>>({
     queryKey: ["/api/kinetic-contract"],
+  });
+
+  const { data: rollbackExecutions, isLoading: rollbackLoading } = useQuery<RollbackExecution[]>({
+    queryKey: ["/api/rollback-executions"],
+    refetchInterval: 5000,
+  });
+
+  const rollbackMutation = useMutation({
+    mutationFn: async (params: { original_execution_id: string; authorized_by: string; dry_run: boolean }) => {
+      const res = await apiRequest("POST", "/api/rollback", params);
+      return res.json();
+    },
+    onSuccess: (data: RollbackExecution) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rollback-executions"] });
+      toast({
+        title: `Rollback ${data.dry_run ? "(DRY RUN)" : ""} ${data.status}`,
+        description: `${data.rollback_execution_id} — reversed ${data.original_playbook_id} execution ${data.original_execution_id.slice(0, 16)}...`,
+      });
+      setRollbackExecId("");
+      setRollbackAuthorizer("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Rollback Failed", description: err.message, variant: "destructive" });
+    },
   });
 
   const filtered = (executions || []).filter((e) => {
@@ -86,7 +119,7 @@ export default function KineticPage() {
             Kinetic Layer
           </h1>
           <p className="text-xs text-muted-foreground">
-            Automated Response (Eng 4) — KL-001 Host Isolation + KL-002 IAM Kill Switch
+            Automated Response (Eng 4) — KL-001 Host Isolation + KL-002 IAM Kill Switch + KL-ROLLBACK-001
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -98,6 +131,9 @@ export default function KineticPage() {
           </Badge>
           <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-playbook-002">
             KL-002
+          </Badge>
+          <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-playbook-rollback">
+            KL-ROLLBACK-001
           </Badge>
         </div>
       </div>
@@ -153,6 +189,7 @@ export default function KineticPage() {
         <TabsList>
           <TabsTrigger value="executions" data-testid="tab-executions">KL-001 Host Isolation</TabsTrigger>
           <TabsTrigger value="kl002" data-testid="tab-kl002">KL-002 IAM Kill Switch</TabsTrigger>
+          <TabsTrigger value="rollback" data-testid="tab-rollback">KL-ROLLBACK-001</TabsTrigger>
           <TabsTrigger value="actions" data-testid="tab-actions">Action Detail</TabsTrigger>
           <TabsTrigger value="contract" data-testid="tab-contract">Interface Contract</TabsTrigger>
         </TabsList>
@@ -349,6 +386,162 @@ export default function KineticPage() {
                               className={`text-[10px] ${exec.status === "SUCCESS" ? "bg-chart-2/20 text-chart-2" : "bg-destructive/20 text-destructive"}`}
                             >
                               {exec.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rollback" className="space-y-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-chart-4" />
+                <CardTitle className="text-sm">Initiate Rollback</CardTitle>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Human-gated operation — requires CPA/Architect sign-off. Defaults to DRY RUN mode.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Original Execution ID</label>
+                  <Input
+                    placeholder="KL-001-... or KL-002-IAM-..."
+                    value={rollbackExecId}
+                    onChange={(e) => setRollbackExecId(e.target.value)}
+                    className="text-xs font-mono h-8"
+                    data-testid="input-rollback-exec-id"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Authorized By</label>
+                  <Input
+                    placeholder="CPA / Architect ID"
+                    value={rollbackAuthorizer}
+                    onChange={(e) => setRollbackAuthorizer(e.target.value)}
+                    className="text-xs h-8"
+                    data-testid="input-rollback-authorizer"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">Mode</label>
+                  <div className="flex items-center gap-2">
+                    <Select value={rollbackDryRun ? "dry" : "live"} onValueChange={(v) => setRollbackDryRun(v === "dry")}>
+                      <SelectTrigger className="w-[120px] text-xs h-8" data-testid="select-rollback-mode">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dry">DRY RUN</SelectItem>
+                        <SelectItem value="live">LIVE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={!rollbackExecId || !rollbackAuthorizer || rollbackAuthorizer.length < 2 || rollbackMutation.isPending}
+                      onClick={() => rollbackMutation.mutate({
+                        original_execution_id: rollbackExecId,
+                        authorized_by: rollbackAuthorizer,
+                        dry_run: rollbackDryRun,
+                      })}
+                      data-testid="button-execute-rollback"
+                    >
+                      {rollbackMutation.isPending ? "Executing..." : "Execute Rollback"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {!rollbackDryRun && (
+                <div className="flex items-center gap-2 text-[10px] text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                  <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                  LIVE MODE — Rollback actions will execute. Ensure authorization is valid.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Rollback History</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {rollbackLoading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : (rollbackExecutions || []).length === 0 ? (
+                <div className="p-8 text-center">
+                  <RotateCcw className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                  <p className="text-sm text-muted-foreground">
+                    No rollbacks executed yet
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use the form above to reverse a KL-001 or KL-002 execution
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px]">Timestamp</TableHead>
+                        <TableHead className="text-[10px]">Rollback ID</TableHead>
+                        <TableHead className="text-[10px]">Original Exec</TableHead>
+                        <TableHead className="text-[10px]">Playbook</TableHead>
+                        <TableHead className="text-[10px]">Mode</TableHead>
+                        <TableHead className="text-[10px]">Authorized By</TableHead>
+                        <TableHead className="text-[10px]">Actions</TableHead>
+                        <TableHead className="text-[10px]">Duration</TableHead>
+                        <TableHead className="text-[10px]">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(rollbackExecutions || []).slice(0, 50).map((rb) => (
+                        <TableRow key={rb.rollback_execution_id} data-testid={`row-rollback-${rb.rollback_execution_id}`}>
+                          <TableCell className="text-[10px] font-mono text-muted-foreground">
+                            {new Date(rb["@timestamp"]).toLocaleTimeString()}
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">
+                            {rb.rollback_execution_id}
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">
+                            {rb.original_execution_id.slice(0, 16)}...
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">{rb.original_playbook_id}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`text-[10px] ${rb.dry_run ? "bg-muted text-muted-foreground" : "bg-destructive/20 text-destructive"}`}>
+                              {rb.dry_run ? "DRY RUN" : "LIVE"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-[10px]">{rb.authorized_by}</TableCell>
+                          <TableCell className="text-[10px]">
+                            <div className="flex flex-col gap-0.5">
+                              {rb.actions.map((a, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <CheckCircle className={`h-2.5 w-2.5 ${a.status === "SUCCESS" || a.status === "SIMULATED" ? "text-chart-2" : a.status === "SKIPPED" ? "text-muted-foreground" : "text-destructive"}`} />
+                                  <span className="text-[9px] text-muted-foreground">{a.action}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">
+                            {rb.timestamps.duration_ms.toFixed(0)}ms
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`text-[10px] ${rb.status === "SUCCESS" ? "bg-chart-2/20 text-chart-2" : "bg-destructive/20 text-destructive"}`}>
+                              {rb.status}
                             </Badge>
                           </TableCell>
                         </TableRow>

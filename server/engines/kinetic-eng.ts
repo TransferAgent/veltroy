@@ -1,4 +1,4 @@
-import type { DispatchSurface, KineticExecution, KL002Execution } from "@shared/schema";
+import type { DispatchSurface, KineticExecution, KL002Execution, RollbackExecution } from "@shared/schema";
 
 const ACTIONS_EXPECTED_TIER1 = [
   "AWS_SG_REVOKE_INGRESS",
@@ -356,6 +356,121 @@ export function processKL002FromDispatch(
   }
 
   return executions;
+}
+
+const ROLLBACK_ACTIONS = [
+  "FETCH_ORIGINAL_AUDIT",
+  "SG_RESTORE",
+  "IAM_KEY_REACTIVATE",
+  "IAM_POLICY_DETACH",
+  "ROLLBACK_AUDIT_POSTED",
+];
+
+export function executeRollback(
+  originalExecutionId: string,
+  authorizedBy: string,
+  dryRun: boolean,
+  kl001Executions: KineticExecution[],
+  kl002Executions: KL002Execution[],
+): RollbackExecution {
+  const tsStart = Date.now();
+  const now = new Date();
+  const rollbackExecId = `RB-${tsStart}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const kl001Match = kl001Executions.find((e) => e.execution_id === originalExecutionId);
+  const kl002Match = kl002Executions.find((e) => e.execution_id === originalExecutionId);
+
+  const originalPlaybook = kl001Match ? "KL-001" : kl002Match ? "KL-002" : "UNKNOWN";
+
+  const target = {
+    host_ip: kl001Match?.host_ip,
+    sg_id: kl001Match?.aws_security_group_id || `sg-${Math.random().toString(36).slice(2, 10)}`,
+    iam_user: kl001Match?.iam_user || kl002Match?.iam_user || "unknown",
+    access_key_id_masked: kl002Match?.access_key_id_masked || "AKIA****XXXX",
+  };
+
+  const durationMs = Math.floor(Math.random() * 2000) + 300;
+  const tsEnd = new Date(tsStart + durationMs);
+
+  const originalFound = !!(kl001Match || kl002Match);
+
+  const actions: RollbackExecution["actions"] = ROLLBACK_ACTIONS.map((action, i) => {
+    let detail = "";
+    let status: "SUCCESS" | "SKIPPED" | "FAILURE" | "SIMULATED";
+    if (action === "FETCH_ORIGINAL_AUDIT") {
+      status = originalFound ? "SUCCESS" : "FAILURE";
+      detail = originalFound
+        ? `Audit record retrieved for execution_id: ${originalExecutionId}`
+        : `No audit record found for ${originalExecutionId} — target fields unavailable`;
+    } else if (dryRun) {
+      status = "SKIPPED";
+      switch (action) {
+        case "SG_RESTORE":
+          detail = `DRY RUN — would restore ingress + egress rules on ${target.sg_id}`;
+          break;
+        case "IAM_KEY_REACTIVATE":
+          detail = `DRY RUN — would reactivate ${target.access_key_id_masked} for ${target.iam_user}`;
+          break;
+        case "IAM_POLICY_DETACH":
+          detail = `DRY RUN — would detach DenyAll policies from ${target.iam_user}`;
+          break;
+        case "ROLLBACK_AUDIT_POSTED":
+          detail = `DRY RUN — rollback audit would be posted — authorized by ${authorizedBy}`;
+          break;
+      }
+    } else {
+      status = "SIMULATED";
+      switch (action) {
+        case "SG_RESTORE":
+          detail = `SG ${target.sg_id} restored to pre-isolation state`;
+          break;
+        case "IAM_KEY_REACTIVATE":
+          detail = `Key ${target.access_key_id_masked} reactivated for ${target.iam_user}`;
+          break;
+        case "IAM_POLICY_DETACH":
+          detail = `All DenyAll policies removed from ${target.iam_user}`;
+          break;
+        case "ROLLBACK_AUDIT_POSTED":
+          detail = `Rollback audit posted — authorized by ${authorizedBy}`;
+          break;
+      }
+    }
+    return {
+      action,
+      status,
+      timestamp: new Date(tsStart + i * 80).toISOString(),
+      detail,
+      dry_run: dryRun,
+    };
+  });
+
+  const hasFailure = actions.some((a) => a.status === "FAILURE");
+  const overallStatus: "SUCCESS" | "PARTIAL_FAILURE" | "ABORTED" =
+    !originalFound && !dryRun ? "PARTIAL_FAILURE" : hasFailure && !dryRun ? "PARTIAL_FAILURE" : "SUCCESS";
+
+  return {
+    rollback_execution_id: rollbackExecId,
+    original_execution_id: originalExecutionId,
+    original_playbook_id: originalPlaybook,
+    playbook_id: "KL-ROLLBACK-001",
+    schema_version: "1.2",
+    "@timestamp": now.toISOString(),
+    state: "COMPLETE",
+    authorized_by: authorizedBy,
+    authorization_valid: true,
+    dry_run: dryRun,
+    target,
+    actions,
+    timestamps: {
+      start: now.toISOString(),
+      end: tsEnd.toISOString(),
+      duration_ms: durationMs,
+    },
+    status: overallStatus,
+    ndr: {
+      blueprint_version: "v1.2",
+    },
+  };
 }
 
 export function getInterfaceContractSchema(): object {

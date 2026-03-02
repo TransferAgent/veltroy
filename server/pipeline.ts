@@ -14,6 +14,7 @@ import type {
   DispatchSurface,
   KineticExecution,
   KL002Execution,
+  RollbackExecution,
 } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 import { generateTrafficBatch } from "./engines/network-eng";
@@ -25,7 +26,7 @@ import {
   runHostCardinality60m,
   runEng4DispatchSurface,
 } from "./engines/dbt-eng";
-import { processDispatchSurface, processKL002FromDispatch } from "./engines/kinetic-eng";
+import { processDispatchSurface, processKL002FromDispatch, executeRollback } from "./engines/kinetic-eng";
 
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
@@ -91,6 +92,7 @@ export class NDRPipeline {
   dispatchSurface: DispatchSurface[] = [];
   kineticExecutions: KineticExecution[] = [];
   kl002Executions: KL002Execution[] = [];
+  rollbackExecutions: RollbackExecution[] = [];
 
   private startTime: number;
   private totalEventsProcessed = 0;
@@ -435,6 +437,21 @@ export class NDRPipeline {
       identitySourceBreakdown,
       attackPatternCount: this.attackPatterns.length,
     };
+  }
+
+  triggerRollback(originalExecutionId: string, authorizedBy: string, dryRun: boolean): RollbackExecution {
+    const result = executeRollback(
+      originalExecutionId,
+      authorizedBy,
+      dryRun,
+      this.kineticExecutions,
+      this.kl002Executions,
+    );
+    this.rollbackExecutions.push(result);
+    if (this.rollbackExecutions.length > 100) {
+      this.rollbackExecutions = this.rollbackExecutions.slice(-100);
+    }
+    return result;
   }
 }
 

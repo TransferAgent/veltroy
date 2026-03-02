@@ -567,3 +567,40 @@ export const kl002ExecutionSchema = z.object({
 });
 
 export type KL002Execution = z.infer<typeof kl002ExecutionSchema>;
+
+export const rollbackExecutionSchema = z.object({
+  rollback_execution_id: z.string(),
+  original_execution_id: z.string(),
+  original_playbook_id: z.string(),
+  playbook_id: z.literal("KL-ROLLBACK-001"),
+  schema_version: z.literal("1.2"),
+  "@timestamp": z.string(),
+  state: kineticStateEnum,
+  authorized_by: z.string(),
+  authorization_valid: z.boolean(),
+  dry_run: z.boolean(),
+  target: z.object({
+    host_ip: z.string().optional(),
+    sg_id: z.string(),
+    iam_user: z.string(),
+    access_key_id_masked: z.string(),
+  }),
+  actions: z.array(z.object({
+    action: z.string(),
+    status: z.enum(["SUCCESS", "SKIPPED", "FAILURE", "SIMULATED"]),
+    timestamp: z.string(),
+    detail: z.string(),
+    dry_run: z.boolean(),
+  })),
+  timestamps: z.object({
+    start: z.string(),
+    end: z.string(),
+    duration_ms: z.number(),
+  }),
+  status: z.enum(["SUCCESS", "PARTIAL_FAILURE", "ABORTED"]),
+  ndr: z.object({
+    blueprint_version: z.literal("v1.2"),
+  }),
+});
+
+export type RollbackExecution = z.infer<typeof rollbackExecutionSchema>;
