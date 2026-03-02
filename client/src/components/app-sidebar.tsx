@@ -20,6 +20,8 @@ import {
   Activity,
   Shield,
   UserCheck,
+  Flame,
+  GitMerge,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +33,8 @@ const navItems = [
   { title: "Identity Logs", url: "/identity", icon: UserCheck },
   { title: "Threat Correlations", url: "/threats", icon: ShieldAlert },
   { title: "Attack Patterns", url: "/attack-patterns", icon: BrainCircuit },
+  { title: "Sigma Rules", url: "/sigma-rules", icon: Flame },
+  { title: "Brain Surface", url: "/correlated", icon: GitMerge },
   { title: "Response Actions", url: "/responses", icon: Zap },
   { title: "Pipeline Monitor", url: "/pipeline", icon: Activity },
 ];

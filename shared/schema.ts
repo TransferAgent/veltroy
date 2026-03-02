@@ -336,3 +336,135 @@ export interface PipelineStatus {
     last_processed: string;
   }[];
 }
+
+export const sigmaAlertTypeEnum = z.enum([
+  "C2_BEACON",
+  "LATERAL_MOVE",
+  "BRUTE_FORCE_SUCCESS",
+  "SUSPICIOUS_IAM_KEY_ROTATION",
+  "HOST_CARDINALITY_SPIKE",
+]);
+
+export const sigmaRuleSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(["production", "testing", "deprecated"]),
+  description: z.string(),
+  author: z.string(),
+  alert_type: sigmaAlertTypeEnum,
+  mitre_technique_ids: z.array(z.string()),
+  mitre_tactics: z.array(z.string()),
+  severity: z.enum(["medium", "high", "critical"]),
+  logsource_index: z.string(),
+  detection_summary: z.string(),
+  fields_to_contract: z.record(z.string()),
+  false_positives: z.array(z.string()),
+  fire_count: z.number(),
+  last_fired: z.string().optional(),
+  registered_at: z.string(),
+});
+
+export type SigmaRule = z.infer<typeof sigmaRuleSchema>;
+
+export const eng4ActionTierEnum = z.enum([
+  "TIER1_ISOLATE",
+  "TIER2_QUARANTINE",
+  "TIER3_INVESTIGATE",
+  "NOMINAL",
+]);
+
+export const correlatedDocSchema = z.object({
+  eng3_correlation_id: z.string(),
+  "@timestamp": z.string(),
+  source_ip: z.string(),
+  host_id: z.string().optional(),
+  host_name: z.string().optional(),
+  network_community_id: z.string().optional(),
+  user_name: z.string(),
+  user_email: z.string().optional(),
+  iam_user: z.string().optional(),
+  aws_security_group_id: z.string().optional(),
+  alert_type_hint: z.string(),
+  severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  destination_ip: z.string(),
+  destination_port: z.number(),
+  network_protocol: z.string(),
+  network_bytes: z.number().optional(),
+  unique_dest_host_count: z.number(),
+  unique_flow_count: z.number(),
+  auth_country: z.string().optional(),
+  mfa_used: z.boolean().optional(),
+  identity_provider: z.string().optional(),
+  auth_action: z.string().optional(),
+  delta_seconds: z.number(),
+  auth_timestamp: z.string(),
+  network_timestamp: z.string(),
+  session_window: z.string(),
+  dbt_updated_at: z.string(),
+});
+
+export type CorrelatedDoc = z.infer<typeof correlatedDocSchema>;
+
+export const hostCardinalitySchema = z.object({
+  source_ip: z.string(),
+  host_id: z.string().optional(),
+  host_name: z.string().optional(),
+  window_start: z.string(),
+  window_end: z.string(),
+  unique_dest_hosts: z.number(),
+  unique_flows: z.number(),
+  total_connections: z.number(),
+  dest_host_list: z.array(z.string()),
+  protocols_used: z.array(z.string()),
+  ports_contacted: z.array(z.number()),
+  max_flow_risk_score: z.number(),
+  first_contact: z.string(),
+  last_contact: z.string(),
+  cardinality_severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  eng4_action_tier: eng4ActionTierEnum,
+  kinetic_law2_escalated: z.boolean(),
+  dbt_updated_at: z.string(),
+});
+
+export type HostCardinality = z.infer<typeof hostCardinalitySchema>;
+
+export const dispatchSurfaceSchema = z.object({
+  eng3_correlation_id: z.string(),
+  host_ip: z.string(),
+  host_id: z.string().optional(),
+  alert_type: z.string(),
+  severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
+  aws_security_group_id: z.string().optional(),
+  iam_user: z.string().optional(),
+  user_name: z.string().optional(),
+  network_community_id: z.string().optional(),
+  destination_ip: z.string(),
+  destination_port: z.number(),
+  network_protocol: z.string(),
+  auth_country: z.string().optional(),
+  mfa_used: z.boolean().optional(),
+  unique_dest_hosts: z.number(),
+  network_timestamp: z.string(),
+  auth_timestamp: z.string(),
+  session_window: z.string(),
+  surface_generated_at: z.string(),
+});
+
+export type DispatchSurface = z.infer<typeof dispatchSurfaceSchema>;
+
+export const sigmaFiringSchema = z.object({
+  id: z.string(),
+  "@timestamp": z.string(),
+  sigma_rule_id: z.string(),
+  alert_type: sigmaAlertTypeEnum,
+  severity: z.enum(["MEDIUM", "HIGH", "CRITICAL"]),
+  host_ip: z.string(),
+  host_id: z.string().optional(),
+  iam_user: z.string().optional(),
+  description: z.string(),
+  related_events: z.array(z.string()),
+  eng4_action_tier: eng4ActionTierEnum.optional(),
+  context_escalation: z.boolean(),
+});
+
+export type SigmaFiring = z.infer<typeof sigmaFiringSchema>;

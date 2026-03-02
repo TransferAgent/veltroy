@@ -59,5 +59,27 @@ export async function registerRoutes(
     res.json(pipeline.getStatus());
   });
 
+  app.get("/api/sigma-rules", (_req, res) => {
+    res.json(pipeline.sigmaRules);
+  });
+
+  app.get("/api/sigma-firings", (_req, res) => {
+    const firings = [...pipeline.sigmaFirings].reverse();
+    res.json(firings);
+  });
+
+  app.get("/api/correlated-docs", (_req, res) => {
+    const docs = [...pipeline.correlatedDocs];
+    res.json(docs);
+  });
+
+  app.get("/api/host-cardinality", (_req, res) => {
+    res.json(pipeline.hostCardinality);
+  });
+
+  app.get("/api/dispatch-surface", (_req, res) => {
+    res.json(pipeline.dispatchSurface);
+  });
+
   return httpServer;
 }

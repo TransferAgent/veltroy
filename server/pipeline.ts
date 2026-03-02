@@ -7,11 +7,22 @@ import type {
   ResponseAction,
   PipelineMetric,
   PipelineStatus,
+  SigmaRule,
+  SigmaFiring,
+  CorrelatedDoc,
+  HostCardinality,
+  DispatchSurface,
 } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 import { generateTrafficBatch } from "./engines/network-eng";
 import { generateIdentityBatch } from "./engines/identity-eng";
 import { seedAttackPatterns, linkCommunityIds } from "./engines/correlation-eng";
+import { getSigmaRules, runAllSigmaRules } from "./engines/sigma-eng";
+import {
+  runNetworkIdentityJoin,
+  runHostCardinality60m,
+  runEng4DispatchSurface,
+} from "./engines/dbt-eng";
 
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
@@ -70,6 +81,12 @@ export class NDRPipeline {
   responseActions: ResponseAction[] = [];
   pipelineMetrics: PipelineMetric[] = [];
 
+  sigmaRules: SigmaRule[] = [];
+  sigmaFirings: SigmaFiring[] = [];
+  correlatedDocs: CorrelatedDoc[] = [];
+  hostCardinality: HostCardinality[] = [];
+  dispatchSurface: DispatchSurface[] = [];
+
   private startTime: number;
   private totalEventsProcessed = 0;
   private intervalId: NodeJS.Timeout | null = null;
@@ -93,6 +110,10 @@ export class NDRPipeline {
       .map((e) => e.network.community_id)
       .filter(Boolean) as string[];
     linkCommunityIds(this.attackPatterns, communityIds);
+
+    this.sigmaRules = getSigmaRules();
+
+    this.runBrainCycle();
 
     for (let i = 0; i < 5; i++) {
       this.runCorrelation();
@@ -144,6 +165,9 @@ export class NDRPipeline {
     if (Math.random() < 0.4) {
       this.runCorrelation();
     }
+
+    this.runBrainCycle();
+
     const correlationMs = Date.now() - correlationStart + randInt(200, 2000);
 
     const responseStart = Date.now();
@@ -186,6 +210,39 @@ export class NDRPipeline {
       if (communityIds.length > 0) {
         linkCommunityIds(this.attackPatterns, communityIds);
       }
+    }
+  }
+
+  private runBrainCycle() {
+    this.correlatedDocs = runNetworkIdentityJoin(
+      this.networkEvents,
+      this.identityEvents,
+    );
+
+    this.hostCardinality = runHostCardinality60m(this.networkEvents);
+
+    this.dispatchSurface = runEng4DispatchSurface(
+      this.correlatedDocs,
+      this.hostCardinality,
+    );
+
+    const newFirings = runAllSigmaRules(
+      this.networkEvents,
+      this.identityEvents,
+      this.correlatedDocs,
+    );
+
+    if (newFirings.length > 0) {
+      this.sigmaFirings.push(...newFirings);
+      if (this.sigmaFirings.length > 200) {
+        this.sigmaFirings = this.sigmaFirings.slice(-200);
+      }
+
+      this.sigmaRules = getSigmaRules();
+    }
+
+    if (this.correlatedDocs.length > 500) {
+      this.correlatedDocs = this.correlatedDocs.slice(-500);
     }
   }
 

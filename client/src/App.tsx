@@ -16,6 +16,8 @@ import Threats from "@/pages/threats";
 import Responses from "@/pages/responses";
 import Pipeline from "@/pages/pipeline";
 import AttackPatternsPage from "@/pages/attack-patterns";
+import SigmaRulesPage from "@/pages/sigma-rules";
+import CorrelatedPage from "@/pages/correlated";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -39,6 +41,8 @@ function Router() {
       <Route path="/identity" component={Identity} />
       <Route path="/threats" component={Threats} />
       <Route path="/attack-patterns" component={AttackPatternsPage} />
+      <Route path="/sigma-rules" component={SigmaRulesPage} />
+      <Route path="/correlated" component={CorrelatedPage} />
       <Route path="/responses" component={Responses} />
       <Route path="/pipeline" component={Pipeline} />
       <Route component={NotFound} />
