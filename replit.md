@@ -35,6 +35,7 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 
 **Core Modules (Engineers):**
 - **Engineer 1 (Packet Metadata)**: Zeek Traffic Simulator generating ECS-compliant conn, dns, and http logs. Implements `network.community_id` and RFC-1918 direction heuristic.
+    - **Python Module** (`modules/network_eng.py`): Standalone Python translation of Engineer 1 specs. Modes: normal (randomised benign), beacon (12 events @ 60s intervals, jitter <100ms, dst 198.51.100.42:443), heartbeat (60s interval, zeek.ndr_heartbeat), high-cardinality (>15 unique dst IPs in 5min/60min → zeek.ndr_high_cardinality). Writes to SQLite `data/ndr.db` table `ndr-network`.
 - **Engineer 2 (Identity Logs)**: Wazuh and CloudTrail simulators generating ECS-compliant Linux, Windows, and AWS CloudTrail authentication events. Includes Wazuh rule.level severity scaling and CloudTrail IAM event classification.
 - **Engineer 3 (Data Correlation - Brain Layer)**:
     - **Warehouse**: Three index templates (`ndr-network-*`, `ndr-identity-*`, `ndr-attack-patterns`) for extended schemas and semantic vector index.
