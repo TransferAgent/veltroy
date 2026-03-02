@@ -45,6 +45,9 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
     - **KL-002 IAM Kill Switch**: Standalone IAM credential containment with a target SLA of < 5 seconds for key deactivation, triggered by specific IAM-related alerts. Includes actions like IAM key deactivation, enumeration, deny policy attachment, and session invalidation.
     - **KL-ROLLBACK-001 Rollback Protocol**: Human-gated operation to reverse actions from KL-001 or KL-002, supporting dry run mode and tracking 5 rollback actions.
 
+**Conductor-Owned (Read-Only — No Engineer May Modify):**
+- `oracle/ndr_phase_gate_0_oracle_v2.py` — Phase Gate 0 Oracle Script (Blueprint v1.2). Checks 7 pass conditions (PC1–PC7): PC1 True Positive in ndr-correlated-*, PC2 Detection Latency <60s, PC3 KL-001 SLA <30s, PC4 Pre-Commit Pattern, PC5 Zero DLQ errors, PC6 community_id populated, PC7 Malformed doc → DLQ. Final arbiter of Phase Gate 0 pass/fail.
+
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for all data types, ensuring data consistency across modules.
 
