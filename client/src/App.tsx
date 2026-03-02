@@ -18,6 +18,7 @@ import Pipeline from "@/pages/pipeline";
 import AttackPatternsPage from "@/pages/attack-patterns";
 import SigmaRulesPage from "@/pages/sigma-rules";
 import CorrelatedPage from "@/pages/correlated";
+import KineticPage from "@/pages/kinetic";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -43,6 +44,7 @@ function Router() {
       <Route path="/attack-patterns" component={AttackPatternsPage} />
       <Route path="/sigma-rules" component={SigmaRulesPage} />
       <Route path="/correlated" component={CorrelatedPage} />
+      <Route path="/kinetic" component={KineticPage} />
       <Route path="/responses" component={Responses} />
       <Route path="/pipeline" component={Pipeline} />
       <Route component={NotFound} />

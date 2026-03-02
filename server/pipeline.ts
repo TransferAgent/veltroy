@@ -12,6 +12,7 @@ import type {
   CorrelatedDoc,
   HostCardinality,
   DispatchSurface,
+  KineticExecution,
 } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 import { generateTrafficBatch } from "./engines/network-eng";
@@ -23,6 +24,7 @@ import {
   runHostCardinality60m,
   runEng4DispatchSurface,
 } from "./engines/dbt-eng";
+import { processDispatchSurface } from "./engines/kinetic-eng";
 
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
@@ -86,6 +88,7 @@ export class NDRPipeline {
   correlatedDocs: CorrelatedDoc[] = [];
   hostCardinality: HostCardinality[] = [];
   dispatchSurface: DispatchSurface[] = [];
+  kineticExecutions: KineticExecution[] = [];
 
   private startTime: number;
   private totalEventsProcessed = 0;
@@ -225,6 +228,14 @@ export class NDRPipeline {
       this.correlatedDocs,
       this.hostCardinality,
     );
+
+    const newKinetic = processDispatchSurface(this.dispatchSurface);
+    if (newKinetic.length > 0) {
+      this.kineticExecutions.push(...newKinetic);
+      if (this.kineticExecutions.length > 200) {
+        this.kineticExecutions = this.kineticExecutions.slice(-200);
+      }
+    }
 
     const newFirings = runAllSigmaRules(
       this.networkEvents,

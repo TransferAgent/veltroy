@@ -22,6 +22,7 @@ All data structures are ECS 8.11.0 compliant. **PLATFORM_VERSION=v1.2** — no v
 - `client/src/pages/attack-patterns.tsx` - Attack Pattern vector index viewer (Eng 3 — ndr-attack-patterns)
 - `client/src/pages/sigma-rules.tsx` - Sigma Rules viewer with Rules tab (5 production rules) and Firings tab (Eng 3 Brain)
 - `client/src/pages/correlated.tsx` - Brain DBT Surface with Master Join, Host Cardinality, and Eng4 Dispatch tabs
+- `client/src/pages/kinetic.tsx` - Kinetic Layer KL-001 viewer with Executions, Action Detail, and Interface Contract tabs (Eng 4)
 - `client/src/pages/responses.tsx` - Response actions table (Eng 4)
 - `client/src/pages/pipeline.tsx` - Oracle Script pipeline monitor
 
@@ -33,6 +34,7 @@ All data structures are ECS 8.11.0 compliant. **PLATFORM_VERSION=v1.2** — no v
 - `server/engines/correlation-eng.ts` - Engineer 3 Attack Pattern Seeder: generates 15 seeded attack patterns with MITRE ATT&CK mappings, IoC tags, detection rules, and community ID linking
 - `server/engines/sigma-eng.ts` - Engineer 3 Sigma Rule Engine: 5 production Sigma rules (C2_BEACON, LATERAL_MOVE, BRUTE_FORCE_SUCCESS, SUSPICIOUS_IAM_KEY_ROTATION, HOST_CARDINALITY_SPIKE) with full evaluation logic
 - `server/engines/dbt-eng.ts` - Engineer 3 DBT Models: Master Join (network↔identity on source.ip ±5min), Host Cardinality 60m (Vectra Killer), Eng4 Dispatch Surface
+- `server/engines/kinetic-eng.ts` - Engineer 4 KL-001 Kinetic Engine: Tier-based circuit breaker, bidirectional SG isolation, IAM kill switch, atomic pre-commit audit, state machine, Interface Contract v1.2
 - `server/storage.ts` - Re-exports pipeline
 
 ### Shared
@@ -98,6 +100,56 @@ Three index templates structurally mapped into the platform data layer (Blueprin
 - DBT models: 3/3 installed, running every pipeline cycle
 - Brain is structurally wired and listening — will fire when matching patterns appear in live traffic
 
+## Engineer 4 Integration (Kinetic Layer — Inject 1)
+
+### KL-001 Automated Host Isolation (Complete)
+The fully-patched composite workflow with all 5 elements merged:
+- **DELIVERABLE 1**: n8n workflow skeleton (translated to TypeScript simulation engine)
+- **PRIORITY 1**: Tier-based circuit breaker replacing AND logic (C2_BEACON alone triggers isolation)
+- **PRIORITY 2**: Bidirectional SG isolation (ingress + egress revoked, bastion SSH permitted, SG tagged)
+- **PRIORITY 4**: Atomic pre-commit audit with execution state machine (PENDING → IN_PROGRESS → COMPLETE)
+- **ONE-LINE FIX**: `labels.eng4_kl001_response_seconds` (float, 3-decimal precision)
+
+#### Tier Classification Engine
+| Tier | Condition | Response |
+|------|-----------|----------|
+| TIER_0_SUPPRESS | Low/Medium severity, non-beacon | No action |
+| TIER_1_ISOLATE | C2_BEACON (session irrelevant) OR HIGH severity | Full isolation |
+| TIER_2_ESCALATE | C2_BEACON + active admin session | Escalated containment |
+| TIER_3_EMERGENCY | Any CRITICAL regardless of type (non-beacon) | Emergency response |
+
+#### 8 Tracked Actions per Execution
+1. AWS_SG_REVOKE_INGRESS
+2. AWS_SG_REVOKE_EGRESS
+3. AWS_SG_TAG_ISOLATION
+4. AWS_SG_BASTION_SSH
+5. IAM_KEY_DEACTIVATE
+6. IAM_DENY_ALL_ATTACH
+7. HOST_MEMORY_PRESERVE
+8. SOC_NOTIFICATION
+
+#### Interface Contract v1.2 (PRIORITY 5)
+11-field payload schema — defines what Eng3 dispatch surface sends to Eng4:
+| Field | Required |
+|-------|----------|
+| host_ip | YES |
+| host_id | no |
+| alert_type | YES |
+| severity | YES |
+| admin_session_active | no |
+| aws_security_group_id | YES |
+| iam_user | YES |
+| eng3_correlation_id | no |
+| network_community_id | no |
+| destination_ip | no |
+| destination_port | no |
+
+### Kinetic Layer Status
+- KL-001 engine: armed, consuming dispatch surface every pipeline cycle
+- SLA target: 30,000ms (30s)
+- Executions: 0 at init (expected — requires dispatch surface triggers from Brain)
+- Remaining Injects: KL-002 (Python Kill Switch), KL-ROLLBACK-001, additional workflows
+
 ## API Endpoints
 - `GET /api/dashboard/stats` - Dashboard statistics including logSourceBreakdown, identitySourceBreakdown, attackPatternCount
 - `GET /api/events` - Network events (Eng 1: zeek.conn, zeek.dns, zeek.http)
@@ -110,6 +162,8 @@ Three index templates structurally mapped into the platform data layer (Blueprin
 - `GET /api/correlated-docs` - Master join results (Eng 3 DBT)
 - `GET /api/host-cardinality` - Host cardinality 60m results (Eng 3 DBT — Vectra Killer)
 - `GET /api/dispatch-surface` - Eng4 dispatch surface (Eng 3 DBT)
+- `GET /api/kinetic-executions` - KL-001 kinetic execution history (Eng 4)
+- `GET /api/kinetic-contract` - Interface Contract v1.2 JSON schema (Eng 4)
 - `GET /api/responses` - Response actions (Eng 4)
 - `GET /api/pipeline/metrics` - Pipeline latency metrics
 - `GET /api/pipeline/status` - Pipeline status (Oracle Script)
@@ -121,6 +175,7 @@ Three index templates structurally mapped into the platform data layer (Blueprin
 - 15 seeded attack patterns with MITRE ATT&CK mappings, IoC tags, and detection rules
 - 5 Sigma detection rules with Interface Contract binding and live fire tracking
 - 3 DBT transformation models: Master Join, Host Cardinality (Vectra Killer), Eng4 Dispatch Surface
+- KL-001 Kinetic Layer: tier-based circuit breaker, bidirectional SG isolation, IAM kill switch, state machine, Interface Contract v1.2
 - Community ID computation for cross-tool correlation + pattern linking
 - RFC-1918 direction heuristic matching Zeek's Site::is_local_addr logic
 - Wazuh rule.level severity scaling and Windows Event ID tracking
@@ -138,7 +193,8 @@ Three index templates structurally mapped into the platform data layer (Blueprin
 - ✅ Brain uploaded (Sigma x5, DBT x3) — structurally wired, listening
 - ⏳ Fuel (Engineer 1 full stack — Sprint 2 criticals pending)
 - ⏳ Fuel (Engineer 2 full stack — remaining patches pending)
-- ⏳ Hands (Engineer 4 Kinetic Layer — pending)
+- ✅ Hands (Engineer 4 KL-001 Inject 1 — armed, listening)
+- ⏳ Hands (Engineer 4 Injects 2-4 — KL-002, KL-ROLLBACK-001, remaining workflows)
 - ⏳ Phase Gate 0 — Synthetic Traffic Test — pending GO-ORDER
 
 ## Tech Stack

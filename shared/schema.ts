@@ -468,3 +468,68 @@ export const sigmaFiringSchema = z.object({
 });
 
 export type SigmaFiring = z.infer<typeof sigmaFiringSchema>;
+
+export const kineticResponseTierEnum = z.enum([
+  "TIER_0_SUPPRESS",
+  "TIER_1_ISOLATE",
+  "TIER_2_ESCALATE",
+  "TIER_3_EMERGENCY",
+]);
+
+export const kineticStateEnum = z.enum([
+  "PENDING",
+  "IN_PROGRESS",
+  "COMPLETE",
+  "PARTIAL_FAILURE",
+]);
+
+export const kineticExecutionSchema = z.object({
+  execution_id: z.string(),
+  playbook_id: z.literal("KL-001"),
+  schema_version: z.literal("1.2"),
+  "@timestamp": z.string(),
+  response_tier: kineticResponseTierEnum,
+  tier_reason: z.string(),
+  state: kineticStateEnum,
+  host_ip: z.string(),
+  host_id: z.string().optional(),
+  alert_type: z.string(),
+  severity: z.string(),
+  admin_session_active: z.boolean(),
+  aws_security_group_id: z.string(),
+  iam_user: z.string(),
+  eng3_correlation_id: z.string(),
+  actions_expected: z.array(z.string()),
+  actions_completed: z.array(z.object({
+    action: z.string(),
+    status: z.enum(["SUCCESS", "SIMULATED"]),
+    timestamp: z.string(),
+  })),
+  timestamps: z.object({
+    alert_received: z.string(),
+    state_written: z.string(),
+    action_completed: z.string(),
+    response_time_ms: z.number(),
+    sla_met: z.boolean(),
+  }),
+  labels: z.object({
+    eng4_kl001_response_seconds: z.number(),
+  }),
+  sg_isolation: z.object({
+    ingress_revoked: z.boolean(),
+    egress_revoked: z.boolean(),
+    bastion_ssh_permitted: z.boolean(),
+    sg_tagged: z.boolean(),
+  }),
+  iam_actions: z.object({
+    key_deactivated: z.boolean(),
+    deny_all_attached: z.boolean(),
+  }),
+  memory_preserved: z.boolean(),
+  soc_notified: z.boolean(),
+  ndr: z.object({
+    blueprint_version: z.literal("v1.2"),
+  }),
+});
+
+export type KineticExecution = z.infer<typeof kineticExecutionSchema>;

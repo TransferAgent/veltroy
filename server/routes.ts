@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { pipeline } from "./pipeline";
 import { updateThreatStatusSchema } from "@shared/schema";
+import { getInterfaceContractSchema } from "./engines/kinetic-eng";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -79,6 +80,15 @@ export async function registerRoutes(
 
   app.get("/api/dispatch-surface", (_req, res) => {
     res.json(pipeline.dispatchSurface);
+  });
+
+  app.get("/api/kinetic-executions", (_req, res) => {
+    const executions = [...pipeline.kineticExecutions].reverse();
+    res.json(executions);
+  });
+
+  app.get("/api/kinetic-contract", (_req, res) => {
+    res.json(getInterfaceContractSchema());
   });
 
   return httpServer;
