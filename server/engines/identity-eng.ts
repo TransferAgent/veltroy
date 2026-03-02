@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import type { IdentityEvent } from "@shared/schema";
 import { ECS_VERSION } from "@shared/schema";
 
-const NDR_BLUEPRINT_VER = "v1.2.1";
+const NDR_BLUEPRINT_VER = "v1.2";
 
 const ECS_DATASET_WAZUH_LINUX = "wazuh.linux";
 const ECS_DATASET_WAZUH_WINDOWS = "wazuh.windows";

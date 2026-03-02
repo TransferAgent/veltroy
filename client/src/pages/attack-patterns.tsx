@@ -163,7 +163,7 @@ export default function AttackPatterns() {
           </p>
         </div>
         <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-blueprint-version">
-          Blueprint v1.3
+          Blueprint v1.2
         </Badge>
       </div>
 

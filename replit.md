@@ -7,7 +7,7 @@ AI-driven Network Detection and Response (NDR) platform prototype. Integrates fo
 - **Eng 3 - Data Correlation**: MITRE ATT&CK threat correlation engine + Attack Pattern vector index
 - **Eng 4 - Automated Response**: Automated response orchestration
 
-All data structures are ECS 8.11.0 compliant. The Oracle Script monitors end-to-end pipeline latency with a sub-60-second detection-to-response SLA target.
+All data structures are ECS 8.11.0 compliant. **PLATFORM_VERSION=v1.2** — no version beyond v1.2 has been authorized. The Oracle Script monitors end-to-end pipeline latency with a sub-60-second detection-to-response SLA target.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Ingested from `local.zeek` and `ndr-ecs-rewriter.zeek`:
 ## Engineer 2 Integration (Wazuh + CloudTrail → ECS)
 Ingested from `ossec.conf` (Linux+Windows) and `cloudtrail-iam.conf`:
 - **Three identity streams**: `wazuh.linux`, `wazuh.windows`, `aws.cloudtrail`
-- **Blueprint version**: v1.2.1
+- **Blueprint version**: v1.2
 - **wazuh.linux**: auth.log/secure monitoring, SSH/PAM/sudo events, Wazuh rule.level→event.severity mapping (0-15 scaled to 0-100), log.file.path, host.hostname, host.ip, source.port
 - **wazuh.windows**: Security Event Channel, Event IDs 4624/4625/4720/4740/7045, winlog.event_id, winlog.logon_type, host.ip
 - **aws.cloudtrail**: IAM events (ConsoleLogin, AssumeRole, CreateUser, AttachUserPolicy, DeleteUser, GetSessionToken, UpdateAccountPasswordPolicy), cloud.provider/account.id/region, user.type, user.id (ARN), event.provider, user_agent.name, GeoIP enrichment
@@ -55,12 +55,12 @@ Ingested from `ossec.conf` (Linux+Windows) and `cloudtrail-iam.conf`:
 - **Held patches**: ECS pin, IDENTITY-006 rebuild, GeoIP architecture, EventBridge upgrade, Heartbeat, Index naming
 
 ## Engineer 3 Integration (OpenSearch Index Templates)
-Three index templates structurally mapped into the platform data layer:
+Three index templates structurally mapped into the platform data layer (Blueprint v1.2):
 - **ndr-network-*** (1A): Extended network event schema with event.duration, event.risk_score, network.transport/packets/type, source/dest bytes/packets/geo, host.os.name, labels.sensor_id/pipeline_version, threat.indicator/technique.id
 - **ndr-identity-*** (1B): Extended identity event schema with user.full_name/email, user_agent.name, related.ip/user, labels.identity_provider/mfa_used/risk_score
 - **ndr-attack-patterns** (1C): Semantic vector index with 15 seeded patterns — pattern_id, pattern_name, description, mitre_technique_id, mitre_tactic, severity (low/medium/high/critical), confidence_score (0-1), related_community_ids (linked to network flows), ioc_tags, raw_pattern_text (detection rules), pattern_embedding (1536-dim kNN vector placeholder)
 - **Correlation linking**: correlationSchema.matched_pattern_id links threat detections to their matching attack pattern
-- **Blueprint version**: v1.3 (Attack Patterns page)
+- **Brain upload status**: Warehouse built, schema-correct, ready to receive Sigma rules (x5) and DBT models (x3)
 
 ## API Endpoints
 - `GET /api/dashboard/stats` - Dashboard statistics including logSourceBreakdown, identitySourceBreakdown, attackPatternCount
@@ -101,4 +101,4 @@ Three index templates structurally mapped into the platform data layer:
 - `apiRequest` function signature: `apiRequest(method, url, data)` — NOT `(url, options)`
 - Do NOT modify index.css; use tailwind.config.ts for design tokens
 - App starts in dark mode
-- Blueprint versions: v1.2 (Eng 1 Zeek), v1.2.1 (Eng 2 Identity), v1.3 (Eng 3 Attack Patterns)
+- **PLATFORM_VERSION=v1.2** — no version beyond v1.2 has been authorized by Alpha Leader or Architect AI

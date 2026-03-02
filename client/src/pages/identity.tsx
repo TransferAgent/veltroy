@@ -300,7 +300,7 @@ export default function Identity() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-[10px] font-mono" data-testid="badge-blueprint-version">
-            Blueprint v1.2.1
+            Blueprint v1.2
           </Badge>
           <div className="flex items-center gap-1.5 rounded-md bg-accent/50 px-2 py-1">
             <UserCheck className="h-3 w-3 text-chart-2" />
