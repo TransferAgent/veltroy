@@ -7,10 +7,10 @@ import type {
   PipelineMetric,
   PipelineStatus,
 } from "@shared/schema";
-import { ECS_VERSION } from "@shared/schema";
+import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
+import { generateTrafficBatch, generateConnLog, generateDnsLog, generateHttpLog } from "./engines/network-eng";
 
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
-const PROTOCOLS = ["tcp", "udp", "http", "https", "dns", "ssh", "rdp", "smtp", "icmp"];
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const DOMAINS = ["corp.local", "prod.internal", "dev.local", "staging.net"];
 const USER_AGENTS = [
@@ -43,19 +43,6 @@ const MITRE_TECHNIQUES = [
   { name: "Scheduled Task/Job", id: "T1053", tactic: 2 },
   { name: "DNS Tunneling", id: "T1572", tactic: 7 },
   { name: "Data Staged", id: "T1074", tactic: 6 },
-];
-
-const RULE_NAMES = [
-  "SSH Brute Force Detected",
-  "Port Scan Activity",
-  "DNS Tunneling Suspected",
-  "Unusual Data Transfer Volume",
-  "C2 Beacon Pattern",
-  "Failed Auth Threshold Exceeded",
-  "Privilege Escalation Attempt",
-  "Lateral Movement Detected",
-  "Abnormal Protocol on Standard Port",
-  "Geographic Anomaly in Access Pattern",
 ];
 
 const ECS_BASE = {
@@ -99,9 +86,9 @@ export class NDRPipeline {
   }
 
   private seedInitialData() {
-    for (let i = 0; i < 20; i++) {
-      this.generateNetworkEvent();
-    }
+    const seedEvents = generateTrafficBatch(20);
+    this.networkEvents.push(...seedEvents);
+
     for (let i = 0; i < 10; i++) {
       this.generateIdentityEvent();
     }
@@ -141,9 +128,8 @@ export class NDRPipeline {
     const ingestionStart = Date.now();
 
     const eventCount = randInt(2, 6);
-    for (let i = 0; i < eventCount; i++) {
-      this.generateNetworkEvent();
-    }
+    const newEvents = generateTrafficBatch(eventCount);
+    this.networkEvents.push(...newEvents);
     const ingestionMs = Date.now() - ingestionStart + randInt(50, 500);
 
     const identityStart = Date.now();
@@ -192,77 +178,11 @@ export class NDRPipeline {
     }
   }
 
-  private generateNetworkEvent() {
-    const isAlert = Math.random() < 0.25;
-    const direction = randItem(["ingress", "egress", "internal"] as const);
-    const severity = isAlert ? randInt(40, 100) : randInt(0, 40);
-    const now = new Date().toISOString();
-    const srcIp = direction === "ingress" ? randIP() : internalIP();
-    const dstIp = direction === "egress" ? randIP() : internalIP();
-    const eventId = randomUUID();
-
-    const event: NetworkEvent = {
-      ...ECS_BASE,
-      id: eventId,
-      "@timestamp": now,
-      event: {
-        id: eventId,
-        kind: isAlert ? "alert" : "event",
-        category: isAlert
-          ? [randItem(["intrusion_detection", "malware", "network"])]
-          : ["network"],
-        type: [randItem(["connection", "start", "end", "denied"])],
-        outcome: isAlert
-          ? randItem(["success", "failure"] as const)
-          : "success",
-        severity,
-        module: "ndr-packet-engine",
-        dataset: "ndr.network",
-        created: now,
-        ...(isAlert ? { action: randItem(RULE_NAMES) } : {}),
-      },
-      source: {
-        ip: srcIp,
-        port: randInt(1024, 65535),
-        ...(direction === "ingress" && Math.random() < 0.7
-          ? { geo: { country_name: randItem(COUNTRIES) } }
-          : {}),
-      },
-      destination: {
-        ip: dstIp,
-        port: randItem([22, 80, 443, 53, 3389, 8080, 25, 3306, 5432, 8443]),
-      },
-      network: {
-        protocol: randItem(PROTOCOLS),
-        direction,
-        bytes: randInt(64, 1048576),
-      },
-      related: {
-        ip: [srcIp, dstIp],
-      },
-      ...(isAlert
-        ? {
-            rule: {
-              name: randItem(RULE_NAMES),
-              id: `NDR-${randInt(1000, 9999)}`,
-            },
-          }
-        : {}),
-    };
-
-    this.networkEvents.push(event);
-  }
-
   private generateIdentityEvent() {
     const isFailed = Math.random() < 0.3;
     const actions = [
-      "user_login",
-      "user_logout",
-      "password_change",
-      "mfa_challenge",
-      "privilege_escalation",
-      "account_lockout",
-      "session_created",
+      "user_login", "user_logout", "password_change",
+      "mfa_challenge", "privilege_escalation", "account_lockout", "session_created",
     ];
     const now = new Date().toISOString();
     const eventId = randomUUID();
@@ -291,17 +211,10 @@ export class NDRPipeline {
       },
       source: {
         ip: sourceIp,
-        ...(Math.random() < 0.5
-          ? { geo: { country_name: randItem(COUNTRIES) } }
-          : {}),
+        ...(Math.random() < 0.5 ? { geo: { country_name: randItem(COUNTRIES) } } : {}),
       },
-      related: {
-        ip: [sourceIp],
-        user: [userName],
-      },
-      user_agent: {
-        original: randItem(USER_AGENTS),
-      },
+      related: { ip: [sourceIp], user: [userName] },
+      user_agent: { original: randItem(USER_AGENTS) },
     };
 
     this.identityEvents.push(event);
@@ -377,12 +290,7 @@ export class NDRPipeline {
       ? recentMetrics[recentMetrics.length - 1].total_pipeline_ms
       : 0;
 
-    const stageAvgs = {
-      ingestion: 0,
-      identity: 0,
-      correlation: 0,
-      response: 0,
-    };
+    const stageAvgs = { ingestion: 0, identity: 0, correlation: 0, response: 0 };
 
     if (recentMetrics.length > 0) {
       recentMetrics.forEach((m) => {
@@ -402,35 +310,14 @@ export class NDRPipeline {
       total_events_processed: this.totalEventsProcessed,
       current_latency_ms: currentLatency,
       sla_target_ms: 60000,
-      sla_compliance_pct:
-        this.slaTotalCount > 0
-          ? (this.slaMetCount / this.slaTotalCount) * 100
-          : 100,
+      sla_compliance_pct: this.slaTotalCount > 0
+        ? (this.slaMetCount / this.slaTotalCount) * 100
+        : 100,
       stages: [
-        {
-          name: "ingestion",
-          status: "active",
-          avg_latency_ms: stageAvgs.ingestion,
-          last_processed: new Date().toISOString(),
-        },
-        {
-          name: "identity",
-          status: "active",
-          avg_latency_ms: stageAvgs.identity,
-          last_processed: new Date().toISOString(),
-        },
-        {
-          name: "correlation",
-          status: "active",
-          avg_latency_ms: stageAvgs.correlation,
-          last_processed: new Date().toISOString(),
-        },
-        {
-          name: "response",
-          status: "active",
-          avg_latency_ms: stageAvgs.response,
-          last_processed: new Date().toISOString(),
-        },
+        { name: "ingestion", status: "active", avg_latency_ms: stageAvgs.ingestion, last_processed: new Date().toISOString() },
+        { name: "identity", status: "active", avg_latency_ms: stageAvgs.identity, last_processed: new Date().toISOString() },
+        { name: "correlation", status: "active", avg_latency_ms: stageAvgs.correlation, last_processed: new Date().toISOString() },
+        { name: "response", status: "active", avg_latency_ms: stageAvgs.response, last_processed: new Date().toISOString() },
       ],
     };
   }
@@ -465,13 +352,16 @@ export class NDRPipeline {
       count: this.correlations.filter((t) => t.threat.indicator.confidence === c).length,
     }));
 
+    const logSourceBreakdown = [
+      { source: "zeek.conn", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.conn").length },
+      { source: "zeek.dns", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.dns").length },
+      { source: "zeek.http", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.http").length },
+    ];
+
     const status = this.getStatus();
     const pipelineStatus: "healthy" | "degraded" | "critical" =
-      status.sla_compliance_pct >= 95
-        ? "healthy"
-        : status.sla_compliance_pct >= 80
-          ? "degraded"
-          : "critical";
+      status.sla_compliance_pct >= 95 ? "healthy" :
+      status.sla_compliance_pct >= 80 ? "degraded" : "critical";
 
     return {
       totalEvents: this.networkEvents.length + this.identityEvents.length,
@@ -479,11 +369,11 @@ export class NDRPipeline {
       responseActions: this.responseActions.length,
       avgLatencyMs: avgLatency,
       slaCompliance: status.sla_compliance_pct,
-      eventsPerSecond:
-        this.totalEventsProcessed / Math.max(1, (Date.now() - this.startTime) / 1000),
+      eventsPerSecond: this.totalEventsProcessed / Math.max(1, (Date.now() - this.startTime) / 1000),
       threatsByConfidence: threatsByConf,
       severityDistribution: sevDist,
       pipelineStatus,
+      logSourceBreakdown,
     };
   }
 }

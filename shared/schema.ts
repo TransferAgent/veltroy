@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 export const ECS_VERSION = "8.11.0";
+export const NDR_BLUEPRINT_VER = "v1.2";
+
+export const ecsDatasetEnum = z.enum(["zeek.conn", "zeek.dns", "zeek.http", "ndr.identity", "ndr.correlation", "ndr.response"]);
 
 const ecsBaseSchema = z.object({
   ecs: z.object({
@@ -49,6 +52,7 @@ export const networkEventSchema = ecsBaseSchema.extend({
     protocol: z.string(),
     direction: z.enum(["ingress", "egress", "internal"]),
     bytes: z.number(),
+    community_id: z.string().optional(),
   }),
   host: z.object({
     name: z.string(),
@@ -60,6 +64,42 @@ export const networkEventSchema = ecsBaseSchema.extend({
   rule: z.object({
     name: z.string(),
     id: z.string(),
+  }).optional(),
+  dns: z.object({
+    type: z.string(),
+    question: z.object({
+      name: z.string(),
+      type: z.string(),
+    }),
+    response_code: z.string(),
+    answers: z.array(z.object({
+      data: z.string(),
+      type: z.string(),
+    })).optional(),
+  }).optional(),
+  url: z.object({
+    full: z.string(),
+    domain: z.string(),
+    path: z.string(),
+    scheme: z.string(),
+  }).optional(),
+  http: z.object({
+    request: z.object({
+      method: z.string(),
+      bytes: z.number().optional(),
+    }),
+    response: z.object({
+      status_code: z.number(),
+      bytes: z.number().optional(),
+    }).optional(),
+    version: z.string().optional(),
+  }).optional(),
+  zeek: z.object({
+    uid: z.string(),
+    log_source: z.string(),
+  }).optional(),
+  ndr: z.object({
+    blueprint_version: z.string(),
   }).optional(),
 });
 
@@ -174,6 +214,7 @@ export interface DashboardStats {
   threatsByConfidence: { confidence: string; count: number }[];
   severityDistribution: { range: string; count: number }[];
   pipelineStatus: "healthy" | "degraded" | "critical";
+  logSourceBreakdown: { source: string; count: number }[];
 }
 
 export interface PipelineStatus {

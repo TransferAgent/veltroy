@@ -2,12 +2,12 @@
 
 ## Overview
 AI-driven Network Detection and Response (NDR) platform prototype. Integrates four specialized modules:
-- **Eng 1 - Packet Metadata**: Network event ingestion and processing
+- **Eng 1 - Packet Metadata**: Network event ingestion via Zeek Traffic Simulator (conn.log, dns.log, http.log)
 - **Eng 2 - Identity Logs**: Authentication and identity event tracking
 - **Eng 3 - Data Correlation**: MITRE ATT&CK threat correlation engine
 - **Eng 4 - Automated Response**: Automated response orchestration
 
-All data structures are ECS 8.11.0 compliant. The Oracle Script monitors end-to-end pipeline latency with a sub-60-second detection-to-response SLA target.
+All data structures are ECS 8.11.0 compliant. NDR Blueprint version: v1.2. The Oracle Script monitors end-to-end pipeline latency with a sub-60-second detection-to-response SLA target.
 
 ## Architecture
 
@@ -15,8 +15,8 @@ All data structures are ECS 8.11.0 compliant. The Oracle Script monitors end-to-
 - `client/src/App.tsx` - Main app layout with sidebar navigation
 - `client/src/components/theme-provider.tsx` - Dark/light mode (dark default)
 - `client/src/components/app-sidebar.tsx` - Navigation sidebar with live stats
-- `client/src/pages/dashboard.tsx` - Command center overview
-- `client/src/pages/events.tsx` - Network events table (Eng 1)
+- `client/src/pages/dashboard.tsx` - Command center overview with Zeek Log Source pie chart
+- `client/src/pages/events.tsx` - Network events with tabbed views (All, conn.log, dns.log, http.log)
 - `client/src/pages/identity.tsx` - Identity logs table (Eng 2)
 - `client/src/pages/threats.tsx` - Threat correlation cards (Eng 3)
 - `client/src/pages/responses.tsx` - Response actions table (Eng 4)
@@ -24,30 +24,43 @@ All data structures are ECS 8.11.0 compliant. The Oracle Script monitors end-to-
 
 ### Backend (Express + TypeScript)
 - `server/routes.ts` - API endpoints
-- `server/pipeline.ts` - NDR pipeline simulation engine
+- `server/pipeline.ts` - NDR pipeline simulation engine (delegates to Engineer modules)
+- `server/engines/network-eng.ts` - Engineer 1 Traffic Simulator: generates ECS-compliant conn/dns/http logs from Zeek field mappings
 - `server/storage.ts` - Re-exports pipeline
 
 ### Shared
-- `shared/schema.ts` - ECS 8.11.0 compliant Zod schemas and TypeScript types
+- `shared/schema.ts` - ECS 8.11.0 compliant Zod schemas with Zeek-specific fields (dns, url, http, zeek, ndr)
+
+## Engineer 1 Integration (Zeek → ECS Rewriter)
+Ingested from `local.zeek` and `ndr-ecs-rewriter.zeek`:
+- **Three log streams**: `zeek.conn` (event.dataset), `zeek.dns`, `zeek.http`
+- **conn.log**: event.kind=event, event.category=network, event.type=connection, network.community_id (SHA1 5-tuple hash), RFC-1918 direction heuristic (egress if source is local, ingress if external, internal if both local)
+- **dns.log**: event.category=network, dns.type from qtype_name, dns.question.name, dns.response_code, dns.answers
+- **http.log**: event.category=web, url.full = scheme://host+path, http.request.method, http.response.status_code
+- **ECS metadata**: agent.name=zeek, agent.type=zeek, zeek.uid (Zeek-format UID), zeek.log_source, ndr.blueprint_version=v1.2
+- **Sprint 2 criticals** (ndr-high-cardinality.zeek, ndr-heartbeat.zeek): NOT yet integrated — held for sequential deployment
 
 ## API Endpoints
-- `GET /api/dashboard/stats` - Dashboard statistics
-- `GET /api/events` - Network events (Eng 1)
+- `GET /api/dashboard/stats` - Dashboard statistics including logSourceBreakdown
+- `GET /api/events` - Network events (Eng 1: zeek.conn, zeek.dns, zeek.http)
 - `GET /api/identity` - Identity events (Eng 2)
 - `GET /api/threats` - Threat correlations (Eng 3)
-- `PATCH /api/threats/:id` - Update threat status
+- `PATCH /api/threats/:id` - Update threat status (Zod validated)
 - `GET /api/responses` - Response actions (Eng 4)
 - `GET /api/pipeline/metrics` - Pipeline latency metrics
 - `GET /api/pipeline/status` - Pipeline status (Oracle Script)
 
 ## Key Features
 - Real-time pipeline simulation generating ECS-compliant events every 4 seconds
+- Three Zeek log streams with distinct tabbed views and specialized columns
+- Community ID computation for cross-tool correlation
+- RFC-1918 direction heuristic matching Zeek's Site::is_local_addr logic
 - MITRE ATT&CK tactic and technique mapping
 - Sub-60s SLA monitoring with compliance tracking
 - Dark/light theme toggle
-- Filterable tables for events, identity logs, and responses
+- Filterable tables with search across IPs, domains, URLs, rules
 - Interactive threat status management
-- Live charts for latency breakdown and throughput
+- Live charts: latency breakdown, severity distribution, log source pie chart
 
 ## Tech Stack
 - React, TypeScript, Tailwind CSS, shadcn/ui
@@ -56,3 +69,8 @@ All data structures are ECS 8.11.0 compliant. The Oracle Script monitors end-to-
 - TanStack Query for data fetching
 - Wouter for client-side routing
 - Zod for schema validation
+
+## Important Notes
+- `apiRequest` function signature: `apiRequest(method, url, data)` — NOT `(url, options)`
+- Do NOT modify index.css; use tailwind.config.ts for design tokens
+- App starts in dark mode

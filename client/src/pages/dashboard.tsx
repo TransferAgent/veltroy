@@ -21,6 +21,8 @@ import {
   BarChart,
   Bar,
   Cell,
+  PieChart,
+  Pie,
 } from "recharts";
 import type {
   DashboardStats,
@@ -243,6 +245,82 @@ function SeverityChart({ data }: { data: { range: string; count: number }[] }) {
   );
 }
 
+const logSourceColors: Record<string, string> = {
+  "zeek.conn": "hsl(var(--chart-1))",
+  "zeek.dns": "hsl(var(--chart-2))",
+  "zeek.http": "hsl(var(--chart-4))",
+};
+
+function LogSourceChart({ data }: { data: { source: string; count: number }[] }) {
+  const total = data.reduce((s, d) => s + d.count, 0);
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-1">
+          <CardTitle className="text-sm font-medium">
+            Zeek Log Sources
+          </CardTitle>
+          <Badge variant="secondary" className="text-[10px] font-mono">
+            Blueprint v1.2
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pb-4">
+        <div className="h-[220px] flex items-center">
+          <div className="w-1/2 h-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="count"
+                  nameKey="source"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={70}
+                  paddingAngle={3}
+                  strokeWidth={0}
+                >
+                  {data.map((entry) => (
+                    <Cell
+                      key={entry.source}
+                      fill={logSourceColors[entry.source] || "hsl(var(--primary))"}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="w-1/2 space-y-2.5">
+            {data.map((entry) => (
+              <div key={entry.source} className="flex items-center gap-2">
+                <div
+                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: logSourceColors[entry.source] || "hsl(var(--primary))" }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-mono">{entry.source}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {entry.count} events ({total > 0 ? ((entry.count / total) * 100).toFixed(0) : 0}%)
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function RecentAlerts({ events }: { events: NetworkEvent[] }) {
   const alerts = events
     .filter((e) => e.event.kind === "alert")
@@ -440,11 +518,15 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <LatencyChart metrics={metrics || []} />
-        <SeverityChart data={stats?.severityDistribution || []} />
+        <LogSourceChart data={stats?.logSourceBreakdown || []} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <SeverityChart data={stats?.severityDistribution || []} />
         <RecentAlerts events={events || []} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
         <ActiveThreats threats={threats || []} />
       </div>
     </div>
