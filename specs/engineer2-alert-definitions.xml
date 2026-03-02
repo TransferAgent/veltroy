@@ -1,0 +1,55 @@
+<!-- /var/ossec/etc/rules/identity_alerts.xml -->
+<!-- Engineer 2 | Blueprint v1.2.1 | Suspicious Auth Alerts -->
+
+<group name="identity_suspicious,">
+
+  <!-- ALERT 1: Successful login from new country -->
+  <rule id="100101" level="12">
+    <if_sid>5503</if_sid>  <!-- SSH success -->
+    <match>Accepted</match>
+    <description>IDENTITY-001: Successful login from new/unexpected country: $(source.geo.country_name)</description>
+    <group>authentication_success,geo_anomaly,</group>
+    <!-- ECS: event.risk_score >= 75 -->
+  </rule>
+
+  <!-- ALERT 2: Account lockout spike (>5 in 60s) -->
+  <rule id="100102" level="14" frequency="5" timeframe="60">
+    <if_matched_sid>5503</if_matched_sid>
+    <same_field>user.name</same_field>
+    <description>IDENTITY-002: Account lockout spike detected for user $(user.name) — possible brute force</description>
+    <group>brute_force,authentication_failure,</group>
+  </rule>
+
+  <!-- ALERT 3: Windows 4740 Account Lockout -->
+  <rule id="100103" level="14">
+    <if_sid>18145</if_sid>  <!-- 4740 base rule -->
+    <description>IDENTITY-003: Windows account lockout event for $(user.name)</description>
+    <group>account_lockout,windows_security,</group>
+  </rule>
+
+  <!-- ALERT 4: AWS ConsoleLogin from new IP -->
+  <rule id="100104" level="13">
+    <decoded_as>json</decoded_as>
+    <field name="event.action">ConsoleLogin</field>
+    <field name="event.outcome">success</field>
+    <description>IDENTITY-004: AWS Console login success from $(source.ip) — verify geo anomaly</description>
+    <group>aws_iam,cloud_auth,</group>
+  </rule>
+
+  <!-- ALERT 5: AWS AttachUserPolicy (Privilege Escalation) -->
+  <rule id="100105" level="15">
+    <decoded_as>json</decoded_as>
+    <field name="event.action">AttachUserPolicy</field>
+    <description>IDENTITY-005: CRITICAL — IAM privilege escalation by $(user.name) — policy attached</description>
+    <group>privilege_escalation,aws_iam,critical,</group>
+  </rule>
+
+  <!-- ALERT 6: Off-hours login (outside 07:00–20:00 UTC) — DEPRECATED, see PATCH-002 -->
+  <rule id="100106" level="10">
+    <if_sid>5503</if_sid>
+    <time>20:00 - 07:00</time>
+    <description>IDENTITY-006: Off-hours successful login detected for $(user.name) from $(source.ip)</description>
+    <group>time_anomaly,authentication_success,</group>
+  </rule>
+
+</group>

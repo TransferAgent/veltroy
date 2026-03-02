@@ -1,0 +1,45 @@
+<!-- =============================================
+     Engineer 2 | Blueprint v1.2.1 | PATCH-002
+     IDENTITY-006 v2: Compound Off-Hours + Geo + Host
+     Fires ONLY when ALL THREE conditions are true:
+       [1] Login outside 07:00-20:00 UTC
+       [2] source.ip country NOT in user's baseline
+       [3] host.hostname NOT in user's known-host list
+     ============================================= -->
+
+<group name="identity_suspicious,behavioral_compound,">
+
+  <!-- Step 1: Time anomaly — off-hours login (SILENT, no alert yet) -->
+  <rule id="100200" level="3" noalert="1">
+    <if_sid>5503</if_sid>
+    <time>20:00 - 07:00</time>
+    <description>COMPOUND-PRE: Off-hours login detected (condition 1/3)</description>
+    <group>off_hours_pre,</group>
+  </rule>
+
+  <!-- Step 2: Off-hours + new country (SILENT, still building context) -->
+  <rule id="100201" level="5" noalert="1">
+    <if_matched_sid>100200</if_matched_sid>
+    <same_field>user.name</same_field>
+    <!-- Geo anomaly injected via Logstash enrichment tag -->
+    <field name="tags">geo_anomaly</field>
+    <description>COMPOUND-PRE: Off-hours + new country (conditions 1+2 of 3)</description>
+    <group>off_hours_geo_pre,</group>
+  </rule>
+
+  <!-- Step 3: FIRE — Off-hours + new country + new host = alert -->
+  <rule id="100202" level="14">
+    <if_matched_sid>100201</if_matched_sid>
+    <same_field>user.name</same_field>
+    <!-- New host tag injected by Logstash known-hosts enrichment -->
+    <field name="tags">new_host</field>
+    <description>
+      IDENTITY-006 v2 [COMPOUND]: $(user.name) logged in off-hours
+      from NEW country $(source.geo.country_name) [$(source.ip)]
+      to UNSEEN host $(host.hostname). All 3 behavioral conditions met.
+    </description>
+    <group>compound_auth_anomaly,high_confidence_alert,</group>
+    <!-- ECS: event.risk_score = 88 -->
+  </rule>
+
+</group>

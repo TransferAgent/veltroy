@@ -1,0 +1,79 @@
+{
+  "@timestamp": "2026-03-02T08:14:32.000Z",
+  "event": {
+    "dataset":  "wazuh.security",
+    "module":   "wazuh",
+    "kind":     "event",
+    "category": "authentication",
+    "type":     "start",
+    "action":   "logged-in",
+    "outcome":  "success",
+    "severity": 3,
+    "id":       "WZH-20260302-004471",
+    "reason":   "Successful user authentication via SSH password"
+  },
+  "user": {
+    "name":     "jsmith",
+    "id":       "1042",
+    "domain":   "CORP-LAB",
+    "roles":    ["developers", "sudo"],
+    "changes":  null
+  },
+  "source": {
+    "ip":       "203.0.113.47",
+    "port":     54312,
+    "geo": {
+      "country_name":     "Germany",
+      "country_iso_code": "DE",
+      "city_name":        "Frankfurt",
+      "location": {
+        "lat": 50.1109,
+        "lon": 8.6821
+      }
+    },
+    "as": {
+      "number":       3320,
+      "organization": {
+        "name": "Deutsche Telekom AG"
+      }
+    }
+  },
+  "destination": {
+    "ip":       "10.0.1.25",
+    "port":     22,
+    "domain":   "lab-host-01.corp.internal"
+  },
+  "host": {
+    "hostname": "lab-host-01",
+    "ip":       ["10.0.1.25"],
+    "os": {
+      "type":    "linux",
+      "name":    "Ubuntu",
+      "version": "22.04.3 LTS"
+    }
+  },
+  "network": {
+    "community_id": "1:Tl2sI6YQXPZ+3pFyDmHq8vNkLjE=",
+    "transport":    "tcp",
+    "type":         "ipv4",
+    "direction":    "inbound"
+  },
+  "agent": {
+    "name":    "wazuh-agent-lab01",
+    "version": "4.7.3",
+    "type":    "wazuh",
+    "id":      "007"
+  },
+  "log": {
+    "file": {
+      "path": "/var/log/auth.log"
+    },
+    "level": "info"
+  },
+  "message": "Mar  2 08:14:32 lab-host-01 sshd[9812]: Accepted password for jsmith from 203.0.113.47 port 54312 ssh2",
+  "tags": [
+    "blueprint-v1.2.1",
+    "engineer2-identity",
+    "sprint1"
+  ]
+}
