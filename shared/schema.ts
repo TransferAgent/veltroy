@@ -533,3 +533,37 @@ export const kineticExecutionSchema = z.object({
 });
 
 export type KineticExecution = z.infer<typeof kineticExecutionSchema>;
+
+export const kl002ExecutionSchema = z.object({
+  execution_id: z.string(),
+  playbook_id: z.literal("KL-002"),
+  schema_version: z.literal("1.2"),
+  "@timestamp": z.string(),
+  state: kineticStateEnum,
+  iam_user: z.string(),
+  access_key_id_masked: z.string(),
+  region: z.string(),
+  dry_run: z.boolean(),
+  sweep_all_keys: z.boolean(),
+  actions_taken: z.array(z.object({
+    action: z.string(),
+    status: z.enum(["SUCCESS", "SKIPPED", "FAILURE", "SIMULATED"]),
+    timestamp: z.string(),
+    detail: z.string(),
+    dry_run: z.boolean(),
+  })),
+  timestamps: z.object({
+    start: z.string(),
+    end: z.string(),
+    duration_ms: z.number(),
+    sla_met: z.boolean(),
+  }),
+  status: z.enum(["SUCCESS", "FAILURE"]),
+  error: z.string().nullable(),
+  triggered_by: z.string().optional(),
+  ndr: z.object({
+    blueprint_version: z.literal("v1.2"),
+  }),
+});
+
+export type KL002Execution = z.infer<typeof kl002ExecutionSchema>;

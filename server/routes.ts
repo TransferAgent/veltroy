@@ -87,6 +87,11 @@ export async function registerRoutes(
     res.json(executions);
   });
 
+  app.get("/api/kl002-executions", (_req, res) => {
+    const executions = [...pipeline.kl002Executions].reverse();
+    res.json(executions);
+  });
+
   app.get("/api/kinetic-contract", (_req, res) => {
     res.json(getInterfaceContractSchema());
   });

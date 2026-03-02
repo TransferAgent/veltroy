@@ -13,6 +13,7 @@ import type {
   HostCardinality,
   DispatchSurface,
   KineticExecution,
+  KL002Execution,
 } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 import { generateTrafficBatch } from "./engines/network-eng";
@@ -24,7 +25,7 @@ import {
   runHostCardinality60m,
   runEng4DispatchSurface,
 } from "./engines/dbt-eng";
-import { processDispatchSurface } from "./engines/kinetic-eng";
+import { processDispatchSurface, processKL002FromDispatch } from "./engines/kinetic-eng";
 
 const USERS = ["admin", "jdoe", "svc_backup", "root", "developer01", "analyst", "db_admin", "guest", "support", "cto"];
 const COUNTRIES = ["United States", "Russia", "China", "Germany", "Brazil", "Netherlands", "South Korea", "Iran", "Romania", "Ukraine"];
@@ -89,6 +90,7 @@ export class NDRPipeline {
   hostCardinality: HostCardinality[] = [];
   dispatchSurface: DispatchSurface[] = [];
   kineticExecutions: KineticExecution[] = [];
+  kl002Executions: KL002Execution[] = [];
 
   private startTime: number;
   private totalEventsProcessed = 0;
@@ -234,6 +236,14 @@ export class NDRPipeline {
       this.kineticExecutions.push(...newKinetic);
       if (this.kineticExecutions.length > 200) {
         this.kineticExecutions = this.kineticExecutions.slice(-200);
+      }
+    }
+
+    const newKL002 = processKL002FromDispatch(this.dispatchSurface);
+    if (newKL002.length > 0) {
+      this.kl002Executions.push(...newKL002);
+      if (this.kl002Executions.length > 200) {
+        this.kl002Executions = this.kl002Executions.slice(-200);
       }
     }
 

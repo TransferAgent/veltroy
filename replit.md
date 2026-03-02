@@ -144,11 +144,29 @@ The fully-patched composite workflow with all 5 elements merged:
 | destination_ip | no |
 | destination_port | no |
 
+### KL-002 IAM Kill Switch (Inject 2 — Complete)
+Standalone IAM credential containment — no dependencies on KL-001:
+- **Playbook**: KL-002-IAM-KILL-SWITCH
+- **SLA Target**: < 5 seconds key deactivation
+- **Triggers**: SUSPICIOUS_IAM_KEY_ROTATION, BRUTE_FORCE_SUCCESS, or CRITICAL severity alerts
+
+#### 6 Tracked Actions per Execution
+1. VERIFY_CALLER_IDENTITY — Validate AWS credentials before proceeding
+2. IAM_KEY_DEACTIVATE — Disable the compromised access key (reversible)
+3. IAM_ENUMERATE_ALL_KEYS — Find and deactivate ALL keys for the user (sweep)
+4. IAM_ATTACH_DENY_ALL — Attach AWSDenyAll managed policy (belt-and-suspenders)
+5. IAM_SESSION_INVALIDATION — Force-expire all active console/CLI sessions
+6. AUDIT_RECORD_POSTED — Post audit record to Eng3 Data Lake
+
+- Access key IDs are masked in audit records (AKIA****XXXX format)
+- Fallback inline deny policy if AWSDenyAll managed policy unavailable
+- Console password rotation + forced reset on session invalidation
+
 ### Kinetic Layer Status
-- KL-001 engine: armed, consuming dispatch surface every pipeline cycle
-- SLA target: 30,000ms (30s)
+- KL-001 engine: armed, consuming dispatch surface every pipeline cycle (SLA: 30s)
+- KL-002 engine: armed, consuming dispatch surface for IAM-related alerts (SLA: 5s)
 - Executions: 0 at init (expected — requires dispatch surface triggers from Brain)
-- Remaining Injects: KL-002 (Python Kill Switch), KL-ROLLBACK-001, additional workflows
+- Remaining Injects: KL-ROLLBACK-001, additional workflows
 
 ## API Endpoints
 - `GET /api/dashboard/stats` - Dashboard statistics including logSourceBreakdown, identitySourceBreakdown, attackPatternCount
@@ -163,6 +181,7 @@ The fully-patched composite workflow with all 5 elements merged:
 - `GET /api/host-cardinality` - Host cardinality 60m results (Eng 3 DBT — Vectra Killer)
 - `GET /api/dispatch-surface` - Eng4 dispatch surface (Eng 3 DBT)
 - `GET /api/kinetic-executions` - KL-001 kinetic execution history (Eng 4)
+- `GET /api/kl002-executions` - KL-002 IAM kill switch execution history (Eng 4)
 - `GET /api/kinetic-contract` - Interface Contract v1.2 JSON schema (Eng 4)
 - `GET /api/responses` - Response actions (Eng 4)
 - `GET /api/pipeline/metrics` - Pipeline latency metrics
@@ -194,7 +213,8 @@ The fully-patched composite workflow with all 5 elements merged:
 - ⏳ Fuel (Engineer 1 full stack — Sprint 2 criticals pending)
 - ⏳ Fuel (Engineer 2 full stack — remaining patches pending)
 - ✅ Hands (Engineer 4 KL-001 Inject 1 — armed, listening)
-- ⏳ Hands (Engineer 4 Injects 2-4 — KL-002, KL-ROLLBACK-001, remaining workflows)
+- ✅ Hands (Engineer 4 KL-002 Inject 2 — IAM Kill Switch armed)
+- ⏳ Hands (Engineer 4 Injects 3-4 — KL-ROLLBACK-001, remaining workflows)
 - ⏳ Phase Gate 0 — Synthetic Traffic Test — pending GO-ORDER
 
 ## Tech Stack

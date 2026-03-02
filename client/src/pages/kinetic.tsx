@@ -31,7 +31,7 @@ import {
   Bell,
   FileJson,
 } from "lucide-react";
-import type { KineticExecution } from "@shared/schema";
+import type { KineticExecution, KL002Execution } from "@shared/schema";
 
 const tierConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   TIER_0_SUPPRESS: { label: "SUPPRESS", color: "bg-muted text-muted-foreground", icon: ShieldOff },
@@ -52,6 +52,11 @@ export default function KineticPage() {
 
   const { data: executions, isLoading } = useQuery<KineticExecution[]>({
     queryKey: ["/api/kinetic-executions"],
+    refetchInterval: 5000,
+  });
+
+  const { data: kl002Executions, isLoading: kl002Loading } = useQuery<KL002Execution[]>({
+    queryKey: ["/api/kl002-executions"],
     refetchInterval: 5000,
   });
 
@@ -78,18 +83,21 @@ export default function KineticPage() {
       <div className="flex items-start justify-between gap-1">
         <div>
           <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">
-            Kinetic Layer — KL-001
+            Kinetic Layer
           </h1>
           <p className="text-xs text-muted-foreground">
-            Automated Host Isolation (Eng 4) — Tier-Based Circuit Breaker
+            Automated Response (Eng 4) — KL-001 Host Isolation + KL-002 IAM Kill Switch
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-blueprint-version">
             Blueprint v1.2
           </Badge>
-          <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-playbook">
+          <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-playbook-001">
             KL-001
+          </Badge>
+          <Badge variant="outline" className="text-[10px] font-mono" data-testid="badge-playbook-002">
+            KL-002
           </Badge>
         </div>
       </div>
@@ -143,7 +151,8 @@ export default function KineticPage() {
 
       <Tabs defaultValue="executions" data-testid="tabs-kinetic">
         <TabsList>
-          <TabsTrigger value="executions" data-testid="tab-executions">Executions</TabsTrigger>
+          <TabsTrigger value="executions" data-testid="tab-executions">KL-001 Host Isolation</TabsTrigger>
+          <TabsTrigger value="kl002" data-testid="tab-kl002">KL-002 IAM Kill Switch</TabsTrigger>
           <TabsTrigger value="actions" data-testid="tab-actions">Action Detail</TabsTrigger>
           <TabsTrigger value="contract" data-testid="tab-contract">Interface Contract</TabsTrigger>
         </TabsList>
@@ -256,6 +265,94 @@ export default function KineticPage() {
                           </TableRow>
                         );
                       })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="kl002" className="space-y-3">
+          <Card>
+            <CardContent className="p-0">
+              {kl002Loading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </div>
+              ) : (kl002Executions || []).length === 0 ? (
+                <div className="p-8 text-center">
+                  <KeyRound className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                  <p className="text-sm text-muted-foreground">
+                    KL-002 IAM Kill Switch armed — awaiting IAM-related dispatch triggers
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Activates on SUSPICIOUS_IAM_KEY_ROTATION, BRUTE_FORCE_SUCCESS, or CRITICAL severity alerts
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2 text-[10px] text-muted-foreground">
+                    <Badge variant="outline" className="text-[10px]">SLA: 5s</Badge>
+                    <Badge variant="outline" className="text-[10px]">Sweep All Keys</Badge>
+                    <Badge variant="outline" className="text-[10px]">AWSDenyAll</Badge>
+                    <Badge variant="outline" className="text-[10px]">Session Invalidation</Badge>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[10px]">Timestamp</TableHead>
+                        <TableHead className="text-[10px]">Execution ID</TableHead>
+                        <TableHead className="text-[10px]">IAM User</TableHead>
+                        <TableHead className="text-[10px]">Access Key</TableHead>
+                        <TableHead className="text-[10px]">Actions</TableHead>
+                        <TableHead className="text-[10px]">Duration</TableHead>
+                        <TableHead className="text-[10px]">SLA</TableHead>
+                        <TableHead className="text-[10px]">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(kl002Executions || []).slice(0, 50).map((exec) => (
+                        <TableRow key={exec.execution_id} data-testid={`row-kl002-${exec.execution_id}`}>
+                          <TableCell className="text-[10px] font-mono text-muted-foreground">
+                            {new Date(exec["@timestamp"]).toLocaleTimeString()}
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">
+                            {exec.execution_id.slice(0, 18)}...
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">{exec.iam_user}</TableCell>
+                          <TableCell className="text-[10px] font-mono">{exec.access_key_id_masked}</TableCell>
+                          <TableCell className="text-[10px]">
+                            <div className="flex flex-col gap-0.5">
+                              {exec.actions_taken.map((a, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <CheckCircle className={`h-2.5 w-2.5 ${a.status === "SUCCESS" || a.status === "SIMULATED" ? "text-chart-2" : a.status === "SKIPPED" ? "text-muted-foreground" : "text-destructive"}`} />
+                                  <span className="text-[9px] text-muted-foreground">{a.action}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-[10px] font-mono">
+                            {exec.timestamps.duration_ms.toFixed(0)}ms
+                          </TableCell>
+                          <TableCell>
+                            {exec.timestamps.sla_met ? (
+                              <Badge className="text-[10px] bg-chart-2/20 text-chart-2">MET</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[10px]">MISS</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`text-[10px] ${exec.status === "SUCCESS" ? "bg-chart-2/20 text-chart-2" : "bg-destructive/20 text-destructive"}`}
+                            >
+                              {exec.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>

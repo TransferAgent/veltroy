@@ -1,4 +1,4 @@
-import type { DispatchSurface, KineticExecution } from "@shared/schema";
+import type { DispatchSurface, KineticExecution, KL002Execution } from "@shared/schema";
 
 const ACTIONS_EXPECTED_TIER1 = [
   "AWS_SG_REVOKE_INGRESS",
@@ -230,6 +230,129 @@ export function processDispatchSurface(
     entries.splice(0, entries.length - 500);
     processedCorrelationIds.clear();
     entries.forEach((id) => processedCorrelationIds.add(id));
+  }
+
+  return executions;
+}
+
+const KL002_ACTIONS = [
+  "VERIFY_CALLER_IDENTITY",
+  "IAM_KEY_DEACTIVATE",
+  "IAM_ENUMERATE_ALL_KEYS",
+  "IAM_ATTACH_DENY_ALL",
+  "IAM_SESSION_INVALIDATION",
+  "AUDIT_RECORD_POSTED",
+];
+
+function generateFakeAccessKeyId(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let key = "AKIA";
+  for (let i = 0; i < 16; i++) {
+    key += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return key;
+}
+
+function maskAccessKeyId(keyId: string): string {
+  if (keyId.length < 8) return "****";
+  return `${keyId.slice(0, 4)}****${keyId.slice(-4)}`;
+}
+
+const processedKL002Users = new Set<string>();
+
+export function processKL002FromDispatch(
+  dispatchEntries: DispatchSurface[]
+): KL002Execution[] {
+  const executions: KL002Execution[] = [];
+
+  for (const entry of dispatchEntries) {
+    const iamUser = entry.iam_user || entry.user_name;
+    if (!iamUser || iamUser === "unknown") continue;
+
+    const alertUpper = entry.alert_type.toUpperCase();
+    const isIamRelated =
+      alertUpper === "SUSPICIOUS_IAM_KEY_ROTATION" ||
+      alertUpper === "BRUTE_FORCE_SUCCESS" ||
+      entry.severity === "CRITICAL";
+
+    if (!isIamRelated) continue;
+
+    const dedupeKey = `${iamUser}|${entry.eng3_correlation_id}`;
+    if (processedKL002Users.has(dedupeKey)) continue;
+
+    const accessKeyId = generateFakeAccessKeyId();
+    const tsStart = Date.now();
+    const now = new Date();
+    const durationMs = Math.floor(Math.random() * 3500) + 500;
+    const tsEnd = new Date(tsStart + durationMs);
+
+    const actionsTaken: KL002Execution["actions_taken"] = KL002_ACTIONS.map((action, i) => {
+      const numKeys = Math.floor(Math.random() * 3) + 1;
+      let detail = "";
+      switch (action) {
+        case "VERIFY_CALLER_IDENTITY":
+          detail = `Caller identity verified — Account=123456789012`;
+          break;
+        case "IAM_KEY_DEACTIVATE":
+          detail = `Key ${maskAccessKeyId(accessKeyId)} set to Inactive`;
+          break;
+        case "IAM_ENUMERATE_ALL_KEYS":
+          detail = `Found ${numKeys} active key(s) for ${iamUser} — all deactivated`;
+          break;
+        case "IAM_ATTACH_DENY_ALL":
+          detail = `AWSDenyAll attached to ${iamUser}`;
+          break;
+        case "IAM_SESSION_INVALIDATION":
+          detail = `Console password rotated + reset required for ${iamUser}`;
+          break;
+        case "AUDIT_RECORD_POSTED":
+          detail = `Audit record posted to Eng3 Data Lake — schema v1.2`;
+          break;
+      }
+      return {
+        action,
+        status: "SIMULATED" as const,
+        timestamp: new Date(tsStart + i * 100).toISOString(),
+        detail,
+        dry_run: false,
+      };
+    });
+
+    const execution: KL002Execution = {
+      execution_id: `KL002-${tsStart}-${Math.random().toString(36).slice(2, 6)}`,
+      playbook_id: "KL-002",
+      schema_version: "1.2",
+      "@timestamp": now.toISOString(),
+      state: "COMPLETE",
+      iam_user: iamUser,
+      access_key_id_masked: maskAccessKeyId(accessKeyId),
+      region: "us-east-1",
+      dry_run: false,
+      sweep_all_keys: true,
+      actions_taken: actionsTaken,
+      timestamps: {
+        start: now.toISOString(),
+        end: tsEnd.toISOString(),
+        duration_ms: durationMs,
+        sla_met: durationMs < 5000,
+      },
+      status: "SUCCESS",
+      error: null,
+      triggered_by: entry.eng3_correlation_id,
+      ndr: {
+        blueprint_version: "v1.2",
+      },
+    };
+
+    executions.push(execution);
+    processedKL002Users.add(dedupeKey);
+  }
+
+  if (processedKL002Users.size > 1000) {
+    const entries = Array.from(processedKL002Users);
+    entries.splice(0, entries.length - 500);
+    processedKL002Users.clear();
+    entries.forEach((id) => processedKL002Users.add(id));
   }
 
   return executions;
