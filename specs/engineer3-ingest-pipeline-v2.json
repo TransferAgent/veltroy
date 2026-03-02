@@ -1,0 +1,68 @@
+{
+  "description": "ECS v2 — 11-field contract enforcement + 4 new field processors",
+  "version": 2,
+  "processors": [
+    {
+      "script": {
+        "lang": "painless",
+        "description": "PROCESSOR 1: ECS Guardian — Reject non-compliant documents",
+        "source": "def required = ['@timestamp', 'source.ip', 'event.category', 'ecs.version']; for (def field : required) { if (!ctx.containsKey(field) || ctx[field] == null) { throw new IllegalArgumentException('ECS_VIOLATION: Missing required field: ' + field); } } if (!ctx['ecs']['version'].equals('8.11.0')) { throw new IllegalArgumentException('ECS_VIOLATION: ecs.version must be 8.11.0, got: ' + ctx['ecs']['version']); }"
+      }
+    },
+    {
+      "script": {
+        "lang": "painless",
+        "description": "PROCESSOR 2 [NEW]: iam_access_key_id — 3-tier CloudTrail extraction",
+        "source": "if (ctx?.aws?.cloudtrail?.user_identity?.access_key_id != null) { ctx['iam_access_key_id'] = ctx.aws.cloudtrail.user_identity.access_key_id; } else if (ctx?.aws?.cloudtrail?.response_elements?.accessKey?.accessKeyId != null) { ctx['iam_access_key_id'] = ctx.aws.cloudtrail.response_elements.accessKey.accessKeyId; } else if (ctx?.event?.dataset == 'aws.cloudtrail' && ctx?.event?.action == 'ConsoleLogin') { ctx['iam_access_key_id'] = 'CONSOLE_SESSION'; } else { ctx['iam_access_key_id'] = 'UNKNOWN'; }"
+      }
+    },
+    {
+      "script": {
+        "lang": "painless",
+        "description": "PROCESSOR 3 [NEW]: aws_region — 3-tier extraction from cloud.region",
+        "source": "if (ctx?.cloud?.region != null) { ctx['aws_region'] = ctx.cloud.region; } else if (ctx?.aws?.cloudtrail?.aws_region != null) { ctx['aws_region'] = ctx.aws.cloudtrail.aws_region; } else { ctx['aws_region'] = 'UNKNOWN'; }"
+      }
+    },
+    {
+      "script": {
+        "lang": "painless",
+        "description": "PROCESSOR 4 [NEW]: admin_session_active — 3-signal boolean derivation",
+        "source": "boolean isAdmin = false; String signal = 'NONE'; if (ctx?.labels?.policy_arn != null) { def adminPolicies = ['AdministratorAccess', 'PowerUserAccess']; for (def p : adminPolicies) { if (ctx.labels.policy_arn.contains(p)) { isAdmin = true; signal = 'POLICY_ATTACH'; break; } } } if (!isAdmin && ctx?.event?.action == 'AssumeRole') { def roleArn = ctx?.aws?.cloudtrail?.request_parameters?.roleArn ?: ''; if (roleArn.toLowerCase().contains('admin')) { isAdmin = true; signal = 'ASSUME_ROLE'; } } ctx['admin_session_active'] = isAdmin; if (ctx['labels'] == null) { ctx['labels'] = [:]; } ctx['labels']['admin_detection_signal'] = signal;"
+      }
+    },
+    {
+      "geoip": {
+        "field": "source.ip",
+        "target_field": "source.geo",
+        "ignore_failure": false
+      }
+    },
+    {
+      "geoip": {
+        "field": "destination.ip",
+        "target_field": "destination.geo",
+        "ignore_failure": true
+      }
+    },
+    {
+      "set": {
+        "field": "labels.pipeline_version",
+        "value": "blueprint-1.2.1-v2"
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "set": {
+        "field": "_index",
+        "value": "ndr-dlq-bad-schema-{{_ingest.timestamp}}"
+      }
+    },
+    {
+      "set": {
+        "field": "labels.dlq_reason",
+        "value": "{{_ingest.on_failure_message}}"
+      }
+    }
+  ]
+}

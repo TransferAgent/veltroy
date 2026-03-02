@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ndr://blueprint-v1.2.1/interface-contract/eng3-to-eng4",
+  "title": "NDR Alert Outbound Payload — Engineer 3 → Engineer 4",
+  "description": "ECS-compliant alert payload emitted by the Data Lake to the Kinetic Layer. Every document written to ndr-correlated-* BEFORE dispatch. Pre-Commit Pattern enforced.",
+  "version": "1.2",
+  "signed_by": "Engineer 3 — Data Architect",
+  "blueprint_version": "1.2.1",
+  "ecs_version": "8.11.0",
+  "type": "object",
+  "required": [
+    "@timestamp",
+    "ecs",
+    "eng3_correlation_id",
+    "host_ip",
+    "host_id",
+    "alert_type",
+    "severity",
+    "aws_security_group_id",
+    "iam_user",
+    "event",
+    "source",
+    "correlation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "@timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC. The moment the correlation was materialized in the Data Lake."
+    },
+    "ecs": {
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "8.11.0",
+          "description": "ECS version — PINNED. Rejection if absent or mismatched."
+        }
+      }
+    },
+    "eng3_correlation_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256(source.ip + @timestamp + sigma_rule_id). Unique, deterministic, idempotent. This is the audit trail anchor — immutable once written.",
+      "example": "a3f1bc9e7d2044a1bcd8f3e901234abc5678def9012345678901234567890abcd"
+    },
+    "host_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "ECS: host.ip. The primary internal asset IP under investigation.",
+      "example": "10.0.2.55"
+    },
+    "host_id": {
+      "type": "string",
+      "description": "ECS: host.id. Stable asset identifier from CMDB/inventory. Used by Eng4 for SG targeting.",
+      "example": "i-0abc1234def567890"
+    },
+    "alert_type": {
+      "type": "string",
+      "enum": [
+        "C2_BEACON",
+        "LATERAL_MOVE",
+        "BRUTE_FORCE_SUCCESS",
+        "SUSPICIOUS_IAM_KEY_ROTATION",
+        "HOST_CARDINALITY_SPIKE",
+        "COMPOUND_BEHAVIORAL"
+      ],
+      "description": "Detection category — mapped from firing Sigma rule ID. Drives Eng4 playbook selection."
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+      "description": "Tiered from event.risk_score: CRITICAL>=90, HIGH>=70, MEDIUM>=40, LOW<40."
+    },
+    "aws_security_group_id": {
+      "type": "string",
+      "pattern": "^sg-[a-z0-9]{8,17}$",
+      "description": "AWS Security Group ID. Sourced from CloudTrail enrichment. Eng4 uses this to execute ISOLATE action.",
+      "example": "sg-0a1b2c3d4e5f67890"
+    },
+    "iam_user": {
+      "type": "string",
+      "description": "ECS: user.name. AWS IAM ARN or username of the implicated identity. Eng4 uses this for IAM quarantine.",
+      "example": "arn:aws:iam::123456789012:user/jsmith"
+    },
+    "event": {
+      "type": "object",
+      "required": ["category", "dataset", "risk_score", "sigma_rule_id"],
+      "properties": {
+        "category": { "type": "string" },
+        "dataset": { "type": "string" },
+        "risk_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "sigma_rule_id": { "type": "string", "description": "e.g. ndr-sigma-001 through ndr-sigma-005" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["ip"],
+      "properties": {
+        "ip": { "type": "string", "format": "ipv4" }
+      }
+    },
+    "correlation": {
+      "type": "object",
+      "required": ["anchor_ip", "time_window_minutes", "method", "pre_commit_written"],
+      "properties": {
+        "anchor_ip": { "type": "string", "format": "ipv4" },
+        "time_window_minutes": { "type": "integer" },
+        "method": { "type": "string" },
+        "pre_commit_written": {
+          "type": "boolean",
+          "const": true,
+          "description": "MUST be true. Alert cannot be dispatched unless Data Lake write is confirmed."
+        },
+        "pre_commit_index": { "type": "string", "description": "e.g. ndr-correlated-2025.01.15" },
+        "pre_commit_doc_id": { "type": "string", "description": "OpenSearch _id of the committed document" }
+      }
+    },
+    "network_summary": { "type": "object" },
+    "threat": { "type": "object" },
+    "labels": { "type": "object" }
+  }
+}
