@@ -81,8 +81,11 @@ CONN_STATES = ["SF", "S0", "S1", "REJ", "RSTO", "RSTR", "SH", "SHR", "OTH"]
 
 _tracker_5min: Dict[str, Dict[str, float]] = {}
 _tracker_60min: Dict[str, Dict[str, float]] = {}
+_port_tracker_5min: Dict[str, Dict[int, float]] = {}
+_alert_cooldown: Dict[str, float] = {}
 _heartbeat_seq = 0
 _heartbeat_start = time.time()
+_heartbeat_packet_count = 0
 
 
 def _init_db():
@@ -586,21 +589,23 @@ def generate_beacon_sequence(
     return events
 
 
-def generate_heartbeat_event() -> Dict[str, Any]:
-    global _heartbeat_seq, _heartbeat_start
+def generate_heartbeat_event(status: str = "ALIVE") -> Dict[str, Any]:
+    global _heartbeat_seq, _heartbeat_start, _heartbeat_packet_count
     _heartbeat_seq += 1
     uptime = time.time() - _heartbeat_start
+
+    event_kind = "event" if status == "ALIVE" else "alert"
 
     event = {
         "id": str(uuid.uuid4()),
         "@timestamp": _now_iso(),
         "ecs": {"version": ECS_VERSION},
         "event": {
-            "kind": "event",
+            "kind": event_kind,
             "category": "process",
             "type": "info",
             "dataset": "zeek.ndr_heartbeat",
-            "severity": 0,
+            "severity": 0 if status == "ALIVE" else 100,
         },
         "source": {"ip": "127.0.0.1", "port": 0},
         "destination": {"ip": "127.0.0.1", "port": 0},
@@ -612,8 +617,9 @@ def generate_heartbeat_event() -> Dict[str, Any]:
                 "sensor_id": SENSOR_ID,
                 "sensor_host": "replit-ndr-01",
                 "sequence_number": _heartbeat_seq,
-                "status": "ALIVE",
+                "status": status,
                 "uptime_seconds": round(uptime, 1),
+                "packets_processed": _heartbeat_packet_count,
                 "auto_restart_eligible": True,
                 "restart_command": "/opt/zeek/bin/zeekctl restart",
             }
@@ -627,17 +633,31 @@ def generate_heartbeat_event() -> Dict[str, Any]:
     return event
 
 
-def _check_high_cardinality(src_ip: str, dst_ip: str) -> Optional[Dict[str, Any]]:
+def generate_shutdown_heartbeat() -> Dict[str, Any]:
+    return generate_heartbeat_event(status="DARK")
+
+
+def _check_high_cardinality(src_ip: str, dst_ip: str, dst_port: int = 0) -> Optional[Dict[str, Any]]:
+    global _heartbeat_packet_count
+    _heartbeat_packet_count += 1
+
     now = time.time()
-    alerts = []
 
     if src_ip not in _tracker_5min:
         _tracker_5min[src_ip] = {}
     _tracker_5min[src_ip][dst_ip] = now
 
+    if src_ip not in _port_tracker_5min:
+        _port_tracker_5min[src_ip] = {}
+    _port_tracker_5min[src_ip][dst_port] = now
+
     expired_5 = [k for k, v in _tracker_5min.get(src_ip, {}).items() if now - v > HIGH_CARD_WINDOW_5MIN]
     for k in expired_5:
         del _tracker_5min[src_ip][k]
+
+    expired_p5 = [k for k, v in _port_tracker_5min.get(src_ip, {}).items() if now - v > HIGH_CARD_WINDOW_5MIN]
+    for k in expired_p5:
+        del _port_tracker_5min[src_ip][k]
 
     if src_ip not in _tracker_60min:
         _tracker_60min[src_ip] = {}
@@ -649,32 +669,39 @@ def _check_high_cardinality(src_ip: str, dst_ip: str) -> Optional[Dict[str, Any]
 
     unique_5 = len(_tracker_5min.get(src_ip, {}))
     unique_60 = len(_tracker_60min.get(src_ip, {}))
+    unique_ports = len(_port_tracker_5min.get(src_ip, {}))
 
     alert = None
 
     if unique_5 > HIGH_CARD_THRESHOLD:
-        dst_set = list(_tracker_5min[src_ip].keys())[:10]
-        alert = _build_high_card_alert(src_ip, unique_5, dst_set, HIGH_CARD_WINDOW_5MIN)
+        cooldown_key = f"{src_ip}|{HIGH_CARD_WINDOW_5MIN}"
+        if cooldown_key not in _alert_cooldown or (now - _alert_cooldown[cooldown_key]) > HIGH_CARD_WINDOW_5MIN:
+            _alert_cooldown[cooldown_key] = now
+            dst_set = list(_tracker_5min[src_ip].keys())[:10]
+            alert = _build_high_card_alert(src_ip, unique_5, unique_ports, dst_set, HIGH_CARD_WINDOW_5MIN)
     elif unique_60 > HIGH_CARD_THRESHOLD:
-        dst_set = list(_tracker_60min[src_ip].keys())[:10]
-        alert = _build_high_card_alert(src_ip, unique_60, dst_set, HIGH_CARD_WINDOW_60MIN)
+        cooldown_key = f"{src_ip}|{HIGH_CARD_WINDOW_60MIN}"
+        if cooldown_key not in _alert_cooldown or (now - _alert_cooldown[cooldown_key]) > HIGH_CARD_WINDOW_60MIN:
+            _alert_cooldown[cooldown_key] = now
+            dst_set = list(_tracker_60min[src_ip].keys())[:10]
+            alert = _build_high_card_alert(src_ip, unique_60, unique_ports, dst_set, HIGH_CARD_WINDOW_60MIN)
 
     return alert
 
 
 def _build_high_card_alert(
-    src_ip: str, unique_count: int, sample_ips: List[str], window: int
+    src_ip: str, unique_count: int, unique_ports: int, sample_ips: List[str], window: int
 ) -> Dict[str, Any]:
     is_internal = _is_rfc1918(src_ip)
     base_score = min((unique_count / 100.0) * 100.0, 100.0)
     if is_internal:
         base_score = min(base_score * 1.2, 100.0)
 
-    if unique_count > 50:
+    if unique_ports > 50:
         detection_class = "port_scan"
-    elif unique_count > 30:
+    elif unique_count > 30 and unique_ports <= 5:
         detection_class = "c2_fanout"
-    elif is_internal:
+    elif unique_count > 15 and is_internal:
         detection_class = "lateral_movement"
     else:
         detection_class = "high_cardinality"
@@ -699,6 +726,7 @@ def _build_high_card_alert(
         "zeek": {
             "ndr_high_cardinality": {
                 "unique_dst_count": unique_count,
+                "unique_dst_ports": unique_ports,
                 "window_seconds": window,
                 "sample_dst_ips": sample_ips,
                 "detection_class": detection_class,
@@ -728,8 +756,9 @@ def generate_normal_traffic(count: int = 10) -> List[Dict[str, Any]]:
 
         src_ip = ev.get("source", {}).get("ip", "")
         dst_ip = ev.get("destination", {}).get("ip", "")
+        dst_port = ev.get("destination", {}).get("port", 0)
         if src_ip and dst_ip:
-            card_alert = _check_high_cardinality(src_ip, dst_ip)
+            card_alert = _check_high_cardinality(src_ip, dst_ip, dst_port)
             if card_alert:
                 events.append(card_alert)
 
