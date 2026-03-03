@@ -77,6 +77,19 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
   - `specs/engineer4-audit-schema.md` — Sprint 1 handover manifest, artifact status, Sprint 2 dependencies
   - `specs/engineer4-80-20-boundary.md` — Automated (80%) vs Human/CPA (20%) enforcement boundary
 - **Lab Adapter**: `oracle/lab_adapter.py` — SQLite shim intercepting all Oracle OpenSearch queries, DEPLOYMENT_STAGE=LAB
+
+## Sprint 2 Clearance Record
+
+- **Date**: March 3, 2026
+- **Status**: CLOSED — All scoped deliverables built, verified, and certified at Blueprint v1.2
+- **Platform advances to**: Sprint 3 readiness
+- **Sprint 2 Deliverables**:
+  - Engineer 1: Zeek Sprint 2 parity — unique_dst_ports tracking, detection_class classification (port_scan/c2_fanout/lateral_movement), per-src cooldown dedup, heartbeat ALIVE/DARK status with packets_processed, graceful shutdown event
+  - Engineer 2: Patches 1–6 applied (ECS 8.11.0 pin, IDENTITY-006 compound rule, GeoIP SPOF 3-layer, CloudTrail EventBridge upgrade path, Wazuh heartbeat IDENTITY-007/008, index naming ratified)
+  - Engineer 3: Adaptive Temporal Windows (two-pass design, per-alert-type correlation_confidence grading), 3 API endpoints for Engineer 4 Sprint 2 blockers (POST /v1/state/kinetic, GET /v1/audit/kinetic/<id>, POST /v1/audit/kinetic/rollback)
+  - Engineer 4: KL-003 Lateral Movement Response, KL-004 Auth Spike Response, KL-005 Console Anomaly Response — all SLAs MET (<30s), all rollback-eligible, SG pre-isolation snapshots captured
+- **Active Playbooks**: KL-001 (Host Isolation), KL-002 (IAM Kill), KL-003 (Lateral Movement), KL-004 (Auth Spike), KL-005 (Console Anomaly)
+- **Blockers resolved**: POST /v1/state/kinetic, GET /v1/audit/kinetic/{id}, POST /v1/audit/kinetic/rollback, payload validation, SG pre-isolation snapshot
 - **PLATFORM_VERSION**: v1.2 — CERTIFIED
 
 ## External Dependencies
