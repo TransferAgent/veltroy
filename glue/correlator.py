@@ -32,6 +32,27 @@ ECS_VERSION = "8.11.0"
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "ndr.db")
 
 
+def _update_correlated_labels(eng3_correlation_id: str, new_labels: Dict[str, Any]):
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        row = conn.execute(
+            'SELECT event_json FROM "ndr-correlated" WHERE eng3_correlation_id = ?',
+            (eng3_correlation_id,)
+        ).fetchone()
+        if row:
+            doc = json.loads(row[0])
+            if "labels" not in doc:
+                doc["labels"] = {}
+            doc["labels"].update(new_labels)
+            conn.execute(
+                'UPDATE "ndr-correlated" SET event_json = ? WHERE eng3_correlation_id = ?',
+                (json.dumps(doc), eng3_correlation_id)
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
 def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> Dict[str, Any]:
     run_id = pipeline_run_id or str(uuid.uuid4())
     run_timestamp = datetime.now(timezone.utc).isoformat()
@@ -114,6 +135,12 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
             response_times.append(rt)
             print(f"  → KL-001 {result.get('tier')} | {payload['alert_type']} | "
                   f"host={payload['host_ip']} | {rt}s | SLA={'MET' if result.get('sla_met') else 'MISSED'}")
+
+            corr_id = payload.get("eng3_correlation_id")
+            if corr_id:
+                _update_correlated_labels(corr_id, {
+                    "eng4_kl001_response_seconds": rt,
+                })
 
         if payload.get("alert_type") in ("SUSPICIOUS_IAM_KEY_ROTATION", "BRUTE_FORCE_SUCCESS"):
             kl002_result = kinetic_eng.execute_kl002(payload)
