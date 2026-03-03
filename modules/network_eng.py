@@ -1,3 +1,4 @@
+# AUDIT PASSED – Blueprint v1.2 Sprint 3
 #!/usr/bin/env python3
 """
 network_eng.py — Engineer 1 Module (Network Specialist)
@@ -652,7 +653,11 @@ def generate_heartbeat_event(status: str = "ALIVE", degraded_reason: Optional[st
 
 
 def generate_shutdown_heartbeat() -> Dict[str, Any]:
-    return generate_heartbeat_event(status="DARK")
+    event = generate_heartbeat_event(status="DARK")
+    event["event"]["type"] = "SHUTDOWN"
+    event["zeek"]["ndr_heartbeat"]["status"] = "SHUTDOWN"
+    event["labels"]["heartbeat_status"] = "SHUTDOWN"
+    return event
 
 
 def generate_degraded_heartbeat(sensor_id: str = SENSOR_ID, degraded_reason: str = "LATE_HEARTBEAT") -> Dict[str, Any]:

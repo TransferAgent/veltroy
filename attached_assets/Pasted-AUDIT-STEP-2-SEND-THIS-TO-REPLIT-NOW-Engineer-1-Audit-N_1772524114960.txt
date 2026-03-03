@@ -1,0 +1,16 @@
+AUDIT STEP 2 — SEND THIS TO REPLIT NOW
+"Engineer 1 Audit — Network Signal (Zeek Core). Run the following and report each result separately:
+
+1. Confirm all 6 Engineer 1 files are present and report file sizes: scripts/local.zeek, scripts/ndr-ecs-rewriter.zeek, scripts/ndr-beacon-detection.zeek, scripts/ndr-high-cardinality.zeek, scripts/ndr-heartbeat.zeek, specs/n8n-watchdog-logic.json.
+
+2. Simulate 50 mock network log events through modules/network_eng.py. Use this composition: 15 normal conn events (varied IPs, ports), 10 DNS events, 10 HTTP events, 10 high-cardinality events (source IP connecting to >15 unique destination IPs), 5 beacon candidates (jitter <0.15, ≥10 connections, risk_score ≥85). Report: total events processed, how many routed to ndr-network, how many triggered alerts.
+
+3. Cardinality verification: from the 10 high-cardinality events, confirm: unique_dst_ports field is present on all cardinality records; detection_class is correctly assigned per taxonomy — port_scan (>50 ports), c2_fanout (>30 dst + ≤5 ports), lateral (>15 dst + internal range); cooldown dedup fires for duplicate src_ip within a 5-minute window (inject 2 identical src_ip cardinality events 30s apart — second should be suppressed).
+
+4. Heartbeat state machine: trigger all 3 states in sequence: (a) ALIVE — normal emit, confirm risk_score=0, event.kind=event, dataset=zeek.ndr_heartbeat; (b) DEGRADED — set sensor last-seen to 75s ago, confirm risk_score=55, event.kind=alert, labels.heartbeat_status=DEGRADED, labels.degraded_reason=LATE_HEARTBEAT, event.dataset=ndr.sensor_health; (c) DARK — set sensor last-seen to 120s ago, confirm risk_score=100, event.kind=alert, dataset=zeek.ndr_heartbeat. Then trigger LOW_PACKET_RATE: set current packets_processed to 40% of rolling average — confirm DEGRADED event with degraded_reason=LOW_PACKET_RATE.
+
+5. Confirm generate_shutdown_heartbeat() fires a graceful shutdown event and it lands in ndr-network with event.type=SHUTDOWN.
+
+6. Confirm packets_processed counter increments across intervals (not resetting to 0 each call).
+
+Score as X/12 against the certified checklist. If 12/12, add comment # AUDIT PASSED – Blueprint v1.2 Sprint 3 to the top of modules/network_eng.py."
