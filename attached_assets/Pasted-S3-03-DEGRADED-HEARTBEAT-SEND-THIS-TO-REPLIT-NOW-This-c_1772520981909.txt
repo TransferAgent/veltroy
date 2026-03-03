@@ -1,0 +1,12 @@
+S3-03 — DEGRADED HEARTBEAT — SEND THIS TO REPLIT NOW
+This closes Engineer 1's only remaining open item and triggers their formal retirement.
+
+"Add a DEGRADED heartbeat status to modules/network_eng.py. This is the middle state between ALIVE and DARK in the sensor health state machine.
+
+Trigger conditions for DEGRADED (either one is sufficient):
+
+LATE_HEARTBEAT: last heartbeat timestamp is between 60 s and 90 s ago (sensor is late but not yet DARK)
+LOW_PACKET_RATE: packets_processed in the current interval has dropped more than 50% below the rolling average of the prior 3 intervals
+Implementation: 1. Add generate_degraded_heartbeat(sensor_id, degraded_reason) function alongside the existing generate_shutdown_heartbeat(). It emits an event to ndr-network with: labels.heartbeat_status=DEGRADED, labels.degraded_reason (LATE_HEARTBEAT or LOW_PACKET_RATE), event.kind=alert, event.type=DEGRADED, risk_score=55 (between ALIVE=0 and DARK=critical), dataset=ndr.sensor_health, blueprint_version=v1.2. 2. Update the sensor health state machine decision tree to: ALIVE → DEGRADED → DARK (replacing the previous two-state model). 3. Update scripts/ndr-heartbeat.zeek header comment only — add a one-line note: # DEGRADED state: parity with network_eng.py as of Sprint 3. Do NOT change the Zeek script logic. 4. Add a Tuning Registry entry in replit.md: DEGRADED heartbeat — RESOLVED Sprint 3. Trigger: LATE_HEARTBEAT (60–90 s) or LOW_PACKET_RATE (>50% drop). Function: generate_degraded_heartbeat(). risk_score=55.
+
+Verification: 1. Simulate a LATE_HEARTBEAT condition (set sensor last-seen to 75 s ago) and confirm a DEGRADED event lands in ndr-network with degraded_reason=LATE_HEARTBEAT. 2. Simulate a LOW_PACKET_RATE condition (set current packets_processed to 40% of rolling average) and confirm DEGRADED event with degraded_reason=LOW_PACKET_RATE. 3. Run POST /run — confirm pipeline baseline holds: 5 Sigma rules, all SLAs met, DLQ NOMINAL. 4. Report: both simulations passed, function name, field names, and risk_score value used."

@@ -52,6 +52,11 @@ HIGH_CARD_WINDOW_60MIN = 3600
 
 HEARTBEAT_INTERVAL_SEC = 60
 HEARTBEAT_DARK_TIMEOUT = 90
+HEARTBEAT_DEGRADED_LOWER = 60
+HEARTBEAT_DEGRADED_UPPER = 90
+HEARTBEAT_LOW_PACKET_DROP_PCT = 0.50
+
+_heartbeat_packet_history = []
 
 DNS_DOMAINS_NORMAL = [
     "google.com", "office365.com", "github.com", "amazonaws.com",
@@ -589,12 +594,19 @@ def generate_beacon_sequence(
     return events
 
 
-def generate_heartbeat_event(status: str = "ALIVE") -> Dict[str, Any]:
-    global _heartbeat_seq, _heartbeat_start, _heartbeat_packet_count
+def generate_heartbeat_event(status: str = "ALIVE", degraded_reason: Optional[str] = None) -> Dict[str, Any]:
+    global _heartbeat_seq, _heartbeat_start, _heartbeat_packet_count, _heartbeat_packet_history
     _heartbeat_seq += 1
     uptime = time.time() - _heartbeat_start
 
+    severity_map = {"ALIVE": 0, "DEGRADED": 55, "DARK": 100}
     event_kind = "event" if status == "ALIVE" else "alert"
+    event_type = "info" if status != "DEGRADED" else "DEGRADED"
+    dataset = "ndr.sensor_health" if status == "DEGRADED" else "zeek.ndr_heartbeat"
+
+    _heartbeat_packet_history.append(_heartbeat_packet_count)
+    if len(_heartbeat_packet_history) > 4:
+        _heartbeat_packet_history = _heartbeat_packet_history[-4:]
 
     event = {
         "id": str(uuid.uuid4()),
@@ -603,9 +615,10 @@ def generate_heartbeat_event(status: str = "ALIVE") -> Dict[str, Any]:
         "event": {
             "kind": event_kind,
             "category": "process",
-            "type": "info",
-            "dataset": "zeek.ndr_heartbeat",
-            "severity": 0 if status == "ALIVE" else 100,
+            "type": event_type,
+            "dataset": dataset,
+            "severity": severity_map.get(status, 100),
+            "risk_score": severity_map.get(status, 100),
         },
         "source": {"ip": "127.0.0.1", "port": 0},
         "destination": {"ip": "127.0.0.1", "port": 0},
@@ -628,13 +641,24 @@ def generate_heartbeat_event(status: str = "ALIVE") -> Dict[str, Any]:
             "blueprint_version": BLUEPRINT_VERSION,
             "tier": "infrastructure",
             "sensor": "zeek",
+            "heartbeat_status": status,
         },
     }
+
+    if status == "DEGRADED" and degraded_reason:
+        event["labels"]["degraded_reason"] = degraded_reason
+
     return event
 
 
 def generate_shutdown_heartbeat() -> Dict[str, Any]:
     return generate_heartbeat_event(status="DARK")
+
+
+def generate_degraded_heartbeat(sensor_id: str = SENSOR_ID, degraded_reason: str = "LATE_HEARTBEAT") -> Dict[str, Any]:
+    event = generate_heartbeat_event(status="DEGRADED", degraded_reason=degraded_reason)
+    event["zeek"]["ndr_heartbeat"]["sensor_id"] = sensor_id
+    return event
 
 
 def _check_high_cardinality(src_ip: str, dst_ip: str, dst_port: int = 0) -> Optional[Dict[str, Any]]:
