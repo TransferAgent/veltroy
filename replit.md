@@ -59,6 +59,22 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for all data types, ensuring data consistency across modules.
 
+## Phase Gate 0 Clearance Record
+
+- **Date**: March 2, 2026
+- **Oracle Result**: 7/7 PASS — 🔓 PHASE GATE 0 — OPEN
+- **Pipeline Run ID**: e3d8822b-3f4c-4337-9b4e-02b616bfa58b
+- **Three patches applied during Live Fire**:
+  - PC2: `labels.detection_latency_seconds` added to `_build_correlated_alert` in detection_eng.py
+  - PC3: `labels.eng4_kl001_response_seconds` written back to ndr-correlated event_json via `_update_correlated_labels` in correlator.py after kinetic execution
+  - PC6: `network_summary.community_ids` added to all 4 non-C2_BEACON Sigma evaluators (LATERAL_MOVE, BRUTE_FORCE_SUCCESS, SUSPICIOUS_IAM_KEY_ROTATION, HOST_CARDINALITY_SPIKE) in detection_eng.py
+- **3 Engineer 4 spec files added**:
+  - `specs/engineer4-sla-framework.md` — SLA timing targets T₀–T₅, E2E <30s, Replit optimizations
+  - `specs/engineer4-audit-schema.md` — Sprint 1 handover manifest, artifact status, Sprint 2 dependencies
+  - `specs/engineer4-80-20-boundary.md` — Automated (80%) vs Human/CPA (20%) enforcement boundary
+- **Lab Adapter**: `oracle/lab_adapter.py` — SQLite shim intercepting all Oracle OpenSearch queries, DEPLOYMENT_STAGE=LAB
+- **PLATFORM_VERSION**: v1.2 — CERTIFIED
+
 ## External Dependencies
 
 The platform integrates with and simulates data from the following external systems:
