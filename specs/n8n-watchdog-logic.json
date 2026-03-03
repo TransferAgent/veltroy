@@ -1,0 +1,366 @@
+{
+  "name": "NDR Platform Watchdog — Blueprint v1.2",
+  "nodes": [
+    {
+      "id": "node-001-trigger",
+      "name": "Schedule Trigger (Every 5 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-002-health",
+      "name": "GET /health — Flask Bus",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:8000/health",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-003-dlq",
+      "name": "GET /dlq/health — DLQ Watcher",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 480],
+      "parameters": {
+        "method": "GET",
+        "url": "http://localhost:8000/dlq/health",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-004-check-health",
+      "name": "IF — oracle_ready AND platform_version",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-oracle",
+              "leftValue": "={{ $json.oracle_ready }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-version",
+              "leftValue": "={{ $json.platform_version }}",
+              "rightValue": "v1.2",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-005-check-dlq",
+      "name": "IF — dlq_status NOMINAL",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 480],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "cond-dlq",
+              "leftValue": "={{ $json.dlq_status }}",
+              "rightValue": "NOMINAL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-006-set-alert",
+      "name": "Set — Build Alert Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [940, 200],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-alert-type",
+              "name": "alert_type",
+              "value": "NDR_WATCHDOG_ALERT",
+              "type": "string"
+            },
+            {
+              "id": "field-platform",
+              "name": "platform",
+              "value": "NDR Platform — Blueprint v1.2",
+              "type": "string"
+            },
+            {
+              "id": "field-severity",
+              "name": "severity",
+              "value": "HIGH",
+              "type": "string"
+            },
+            {
+              "id": "field-message",
+              "name": "message",
+              "value": "=NDR Platform health check FAILED at {{ $now.toISO() }}. oracle_ready={{ $('GET /health — Flask Bus').item.json.oracle_ready }}, platform_version={{ $('GET /health — Flask Bus').item.json.platform_version }}. Immediate investigation required.",
+              "type": "string"
+            },
+            {
+              "id": "field-deployment",
+              "name": "deployment_stage",
+              "value": "LAB",
+              "type": "string"
+            },
+            {
+              "id": "field-blueprint",
+              "name": "blueprint_version",
+              "value": "v1.2",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-007-set-dlq-alert",
+      "name": "Set — Build DLQ Alert Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [940, 480],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-dlq-type",
+              "name": "alert_type",
+              "value": "NDR_DLQ_SPIKE_ALERT",
+              "type": "string"
+            },
+            {
+              "id": "field-dlq-severity",
+              "name": "severity",
+              "value": "CRITICAL",
+              "type": "string"
+            },
+            {
+              "id": "field-dlq-message",
+              "name": "message",
+              "value": "=DLQ spike detected at {{ $now.toISO() }}. dlq_status={{ $('GET /dlq/health — DLQ Watcher').item.json.dlq_status }}, unexpected_count={{ $('GET /dlq/health — DLQ Watcher').item.json.dlq_unexpected_count }}. Investigate ndr-dlq immediately.",
+              "type": "string"
+            },
+            {
+              "id": "field-dlq-stage",
+              "name": "deployment_stage",
+              "value": "LAB",
+              "type": "string"
+            },
+            {
+              "id": "field-dlq-blueprint",
+              "name": "blueprint_version",
+              "value": "v1.2",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-008-slack-health",
+      "name": "Slack Alert — Platform Health FAIL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1180, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_SLACK_WEBHOOK_URL",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "LAB STAGE: Replace PLACEHOLDER_SLACK_WEBHOOK_URL with live webhook in production. Remove LAB deployment_stage flag before Phase Gate 1."
+    },
+    {
+      "id": "node-009-slack-dlq",
+      "name": "Slack Alert — DLQ Spike",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1180, 480],
+      "parameters": {
+        "method": "POST",
+        "url": "PLACEHOLDER_SLACK_WEBHOOK_URL",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "notes": "LAB STAGE: Replace PLACEHOLDER_SLACK_WEBHOOK_URL with live Slack or Teams webhook in production."
+    },
+    {
+      "id": "node-010-nominal",
+      "name": "No Action — Platform NOMINAL",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [940, 360],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Every 5 min)": {
+      "main": [
+        [
+          {"node": "GET /health — Flask Bus", "type": "main", "index": 0},
+          {"node": "GET /dlq/health — DLQ Watcher", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "GET /health — Flask Bus": {
+      "main": [
+        [{"node": "IF — oracle_ready AND platform_version", "type": "main", "index": 0}]
+      ]
+    },
+    "GET /dlq/health — DLQ Watcher": {
+      "main": [
+        [{"node": "IF — dlq_status NOMINAL", "type": "main", "index": 0}]
+      ]
+    },
+    "IF — oracle_ready AND platform_version": {
+      "main": [
+        [{"node": "No Action — Platform NOMINAL", "type": "main", "index": 0}],
+        [{"node": "Set — Build Alert Payload", "type": "main", "index": 0}]
+      ]
+    },
+    "IF — dlq_status NOMINAL": {
+      "main": [
+        [{"node": "No Action — Platform NOMINAL", "type": "main", "index": 0}],
+        [{"node": "Set — Build DLQ Alert Payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Set — Build Alert Payload": {
+      "main": [
+        [{"node": "Slack Alert — Platform Health FAIL", "type": "main", "index": 0}]
+      ]
+    },
+    "Set — Build DLQ Alert Payload": {
+      "main": [
+        [{"node": "Slack Alert — DLQ Spike", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "ndr-platform-lab"
+  },
+  "tags": [
+    {
+      "id": "tag-ndr-watchdog",
+      "name": "NDR-Watchdog",
+      "createdAt": "2026-03-03T00:00:00.000Z"
+    },
+    {
+      "id": "tag-blueprint",
+      "name": "Blueprint-v1.2",
+      "createdAt": "2026-03-03T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-03T00:00:00.000Z",
+  "versionId": "ndr-watchdog-v1.0-lab",
+  "_metadata": {
+    "blueprint_version": "v1.2",
+    "deployment_stage": "LAB",
+    "authored_by": "Architect AI",
+    "sprint": "Sprint 2 deferred — placed Sprint 3 audit",
+    "flask_bus_url": "http://localhost:8000",
+    "production_note": "Replace localhost:8000 with App Runner URL at Phase Gate 1. Replace PLACEHOLDER_SLACK_WEBHOOK_URL with live webhook. Set deployment_stage to PRODUCTION.",
+    "monitors": [
+      "GET /health — oracle_ready, platform_version=v1.2",
+      "GET /dlq/health — dlq_status=NOMINAL",
+      "Alert conditions: oracle_ready=false, version drift, DLQ WARNING or CRITICAL"
+    ],
+    "alert_channels": ["Slack (primary)", "Teams (Sprint 5 KL-005 parity)"],
+    "schedule": "Every 5 minutes (production). Manual trigger available."
+  }
+}
