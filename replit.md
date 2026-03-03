@@ -51,7 +51,7 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 
 **Orchestration Layer:**
 - `glue/correlator.py`: Thin Bus Wire — calls all 4 modules in sequence (network_eng → identity_eng → detection_eng → kinetic_eng). Exposes `run_pipeline()`, `get_stats()`, `get_health()`. No detection logic — calls only.
-- `main.py`: Flask Bus on port 5000 — POST /run, GET /stats, GET /health endpoints for Oracle and external access.
+- `main.py`: Flask Bus on port 8000 (port 5000 reserved for TypeScript dashboard preview) — POST /run, GET /stats, GET /health endpoints for Oracle and external access. Runs as "Flask Bus" workflow.
 
 **Conductor-Owned (Read-Only — No Engineer May Modify):**
 - `oracle/ndr_phase_gate_0_oracle_v2.py` — Phase Gate 0 Oracle Script (Blueprint v1.2). Checks 7 pass conditions (PC1–PC7): PC1 True Positive in ndr-correlated-*, PC2 Detection Latency <60s, PC3 KL-001 SLA <30s, PC4 Pre-Commit Pattern, PC5 Zero DLQ errors, PC6 community_id populated, PC7 Malformed doc → DLQ. Final arbiter of Phase Gate 0 pass/fail.

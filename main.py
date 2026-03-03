@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-main.py — Flask Bus (Port 5000)
+main.py — Flask Bus (Port 8000)
 Blueprint v1.2 | Phase Gate 0
 
 Exposes three endpoints for the NDR platform:
   POST /run    → Execute full pipeline via correlator
   GET  /stats  → Query all four tables
   GET  /health → Platform health check
+
+Port 5000 is reserved for the TypeScript dashboard preview.
+Flask Bus runs on port 8000.
 """
 
 import json
@@ -44,7 +47,7 @@ def health_endpoint():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("FLASK_PORT", 5000))
+    port = int(os.environ.get("FLASK_PORT", 8000))
     print(f"[main.py] Flask Bus starting on port {port}")
     print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health")
     app.run(host="0.0.0.0", port=port, debug=False)
