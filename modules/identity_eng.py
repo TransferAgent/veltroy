@@ -11,13 +11,15 @@ Event types:
   - Windows Event Log (4624, 4625, 4720, 4740, 7045)
   - AWS CloudTrail IAM (ConsoleLogin, AssumeRole, CreateUser, AttachUserPolicy)
 
-Alert conditions (IDENTITY-001 through IDENTITY-006):
+Alert conditions (IDENTITY-001 through IDENTITY-008):
   001: Successful login from new/unexpected country (risk_score >= 75)
   002: Account lockout spike (>5 failures in 60s for one user)
   003: Windows 4740 account lockout
   004: AWS ConsoleLogin from new IP
   005: IAM privilege escalation via AttachUserPolicy (CRITICAL)
   006 v2: Compound behavioral — off-hours AND new country AND new host
+  007: Wazuh agent SILENT (>5min disconnect, dataset=wazuh.agent_health)
+  008: Wazuh agent FLAPPING (multiple disconnects in 1hr)
 
 GeoIP: Three-layer simulation (MaxMind primary, ASN always, reputation scoring)
 
@@ -28,6 +30,9 @@ Spec sources:
   - specs/engineer2-patch1-ecs-pin.md
   - specs/engineer2-patch2-identity006v2.xml
   - specs/engineer2-patch3-geoip-spof.md
+  - specs/engineer2-patch4-cloudtrail-eventbridge.md
+  - specs/engineer2-patch5-wazuh-heartbeat.md
+  - specs/engineer2-patch6-index-naming.md
 """
 
 import json
@@ -684,6 +689,155 @@ def _trigger_identity_005(test_run_id: Optional[str] = None) -> Dict[str, Any]:
     return event
 
 
+def _trigger_identity_007(test_run_id: Optional[str] = None) -> Dict[str, Any]:
+    hostname = random.choice(LINUX_HOSTNAMES)
+    agent_id = f"{random.randint(1, 99):03d}"
+    agent_name = f"wazuh-agent-{hostname}"
+    d_ip = _rand_internal_ip()
+
+    event = {
+        "id": str(uuid.uuid4()),
+        "@timestamp": _now_iso(),
+        "ecs": {"version": ECS_VERSION},
+        "event": {
+            "dataset": "wazuh.agent_health",
+            "module": "wazuh",
+            "kind": "alert",
+            "category": "host",
+            "type": "info",
+            "action": "agent-disconnected",
+            "severity": 12,
+            "risk_score": 65,
+            "id": f"WZH-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{random.randint(100000, 999999):06d}",
+            "reason": (
+                f"IDENTITY-007: Wazuh agent {agent_name} [ID: {agent_id}] "
+                f"has gone SILENT. Identity telemetry gap on host {hostname}. "
+                f"community_id correlation NOW DEGRADED for this endpoint."
+            ),
+        },
+        "host": {
+            "hostname": hostname,
+            "ip": [d_ip],
+            "os": {
+                "type": "linux",
+                "name": "Ubuntu",
+                "version": "22.04.3 LTS",
+            },
+        },
+        "agent": {
+            "name": agent_name,
+            "version": "4.7.3",
+            "type": "wazuh",
+            "id": agent_id,
+        },
+        "rule": {
+            "id": "100300",
+            "name": (
+                f"IDENTITY-007: Wazuh agent {agent_name} [ID: {agent_id}] "
+                f"has gone SILENT on host {hostname}"
+            ),
+        },
+        "source": {"ip": d_ip, "port": 0},
+        "destination": {"ip": "0.0.0.0", "port": 0},
+        "network": {
+            "community_id": compute_community_id(d_ip, 0, "0.0.0.0", 0, 6),
+        },
+        "message": (
+            f"Agent {agent_name} (ID: {agent_id}) has not reported in 300+ seconds. "
+            f"Host {hostname} identity telemetry is now degraded."
+        ),
+        "tags": [
+            "blueprint-v1.2", "engineer2-identity", "sprint2",
+            "agent_heartbeat", "infrastructure_health", "data_quality",
+        ],
+        "labels": {
+            "blueprint_version": BLUEPRINT_VERSION,
+            "sensor": "wazuh",
+            "ecs_version": ECS_VERSION,
+            "alert_rule": "IDENTITY-007",
+        },
+    }
+
+    if test_run_id:
+        event["labels"]["test_run_id"] = test_run_id
+
+    return event
+
+
+def _trigger_identity_008(test_run_id: Optional[str] = None) -> Dict[str, Any]:
+    hostname = random.choice(LINUX_HOSTNAMES)
+    agent_id = f"{random.randint(1, 99):03d}"
+    agent_name = f"wazuh-agent-{hostname}"
+    d_ip = _rand_internal_ip()
+
+    event = {
+        "id": str(uuid.uuid4()),
+        "@timestamp": _now_iso(),
+        "ecs": {"version": ECS_VERSION},
+        "event": {
+            "dataset": "wazuh.agent_health",
+            "module": "wazuh",
+            "kind": "alert",
+            "category": "host",
+            "type": "info",
+            "action": "agent-flapping",
+            "severity": 7,
+            "risk_score": 45,
+            "id": f"WZH-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{random.randint(100000, 999999):06d}",
+            "reason": (
+                f"IDENTITY-008: Wazuh agent {agent_name} has disconnected "
+                f"MULTIPLE TIMES in 1 hour. Possible instability or tampering."
+            ),
+        },
+        "host": {
+            "hostname": hostname,
+            "ip": [d_ip],
+            "os": {
+                "type": "linux",
+                "name": "Ubuntu",
+                "version": "22.04.3 LTS",
+            },
+        },
+        "agent": {
+            "name": agent_name,
+            "version": "4.7.3",
+            "type": "wazuh",
+            "id": agent_id,
+        },
+        "rule": {
+            "id": "100301",
+            "name": (
+                f"IDENTITY-008: Wazuh agent {agent_name} has disconnected "
+                f"MULTIPLE TIMES in 1 hour on host {hostname}"
+            ),
+        },
+        "source": {"ip": d_ip, "port": 0},
+        "destination": {"ip": "0.0.0.0", "port": 0},
+        "network": {
+            "community_id": compute_community_id(d_ip, 0, "0.0.0.0", 0, 6),
+        },
+        "message": (
+            f"Agent {agent_name} (ID: {agent_id}) has disconnected multiple times "
+            f"within 3600s timeframe. Host {hostname} may be unstable."
+        ),
+        "tags": [
+            "blueprint-v1.2", "engineer2-identity", "sprint2",
+            "agent_flapping", "infrastructure_health",
+        ],
+        "labels": {
+            "blueprint_version": BLUEPRINT_VERSION,
+            "sensor": "wazuh",
+            "ecs_version": ECS_VERSION,
+            "alert_rule": "IDENTITY-008",
+        },
+    }
+
+    if test_run_id:
+        event["labels"]["test_run_id"] = test_run_id
+
+    return event
+
+
 def _trigger_identity_006(test_run_id: Optional[str] = None) -> Dict[str, Any]:
     user = random.choice(LINUX_USERS)
     new_country = random.choice(SUSPICIOUS_COUNTRIES)
@@ -839,6 +993,14 @@ def run_alert_simulation(test_run_id: Optional[str] = None) -> List[Dict[str, An
     id006 = _trigger_identity_006(test_run_id)
     all_events.append(id006)
     print(f"  IDENTITY-006 fired: compound off-hours + {id006['source']['geo']['country_name']} + {id006['host']['hostname']}")
+
+    id007 = _trigger_identity_007(test_run_id)
+    all_events.append(id007)
+    print(f"  IDENTITY-007 fired: agent {id007['agent']['name']} SILENT on {id007['host']['hostname']}")
+
+    id008 = _trigger_identity_008(test_run_id)
+    all_events.append(id008)
+    print(f"  IDENTITY-008 fired: agent {id008['agent']['name']} FLAPPING on {id008['host']['hostname']}")
 
     _write_events(all_events)
     return all_events
