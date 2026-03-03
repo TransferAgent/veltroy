@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, request, jsonify
-from glue.correlator import run_pipeline, get_stats, get_health
+from glue.correlator import run_pipeline, get_stats, get_health, _monitor_dlq
 
 app = Flask(__name__)
 
@@ -51,6 +51,12 @@ def stats_endpoint():
 def health_endpoint():
     health = get_health()
     return jsonify(health), 200
+
+
+@app.route("/dlq/health", methods=["GET"])
+def dlq_health_endpoint():
+    result = _monitor_dlq()
+    return jsonify(result), 200
 
 
 def _fetch_correlated_by_id(lookup_id: str):
@@ -196,6 +202,6 @@ def audit_kinetic_rollback():
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 8000))
     print(f"[main.py] Flask Bus starting on port {port}")
-    print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health")
+    print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health | GET /dlq/health")
     print(f"[main.py] Engineer 3 API: POST /v1/state/kinetic | GET /v1/audit/kinetic/<id> | POST /v1/audit/kinetic/rollback")
     app.run(host="0.0.0.0", port=port, debug=False)

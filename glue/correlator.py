@@ -53,6 +53,70 @@ def _update_correlated_labels(eng3_correlation_id: str, new_labels: Dict[str, An
         conn.close()
 
 
+def _monitor_dlq() -> Dict[str, Any]:
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        try:
+            total = conn.execute('SELECT COUNT(*) FROM "ndr-dlq"').fetchone()[0]
+        except sqlite3.OperationalError:
+            return {
+                "dlq_total": 0,
+                "dlq_pc7_test_records": 0,
+                "dlq_unexpected_count": 0,
+                "dlq_status": "NOMINAL",
+                "flagged_records": [],
+            }
+
+        pc7_count = conn.execute(
+            'SELECT COUNT(*) FROM "ndr-dlq" WHERE event_json LIKE \'%"test_run_id": "PC7_MALFORMED_TEST"%\' OR event_json LIKE \'%"test_run_id":"PC7_MALFORMED_TEST"%\''
+        ).fetchone()[0]
+
+        unexpected_count = total - pc7_count
+
+        if unexpected_count == 0:
+            dlq_status = "NOMINAL"
+        elif unexpected_count <= 3:
+            dlq_status = "WARNING"
+        else:
+            dlq_status = "CRITICAL_DLQ_SPIKE"
+
+        flagged_records = []
+        if unexpected_count > 0:
+            all_rows = conn.execute('SELECT id, event_json FROM "ndr-dlq"').fetchall()
+            for row in all_rows:
+                doc = json.loads(row[1])
+                labels = doc.get("labels", {})
+                if labels.get("test_run_id") == "PC7_MALFORMED_TEST":
+                    continue
+                doc.setdefault("labels", {})
+                doc["labels"]["dlq_watcher_flag"] = True
+                doc["labels"]["investigation_required"] = True
+                conn.execute(
+                    'UPDATE "ndr-dlq" SET event_json = ? WHERE id = ?',
+                    (json.dumps(doc), row[0])
+                )
+                flagged_records.append({
+                    "id": row[0],
+                    "dlq_watcher_flag": True,
+                    "investigation_required": True,
+                    "event_summary": {
+                        "timestamp": doc.get("@timestamp", "unknown"),
+                        "reason": doc.get("labels", {}).get("dlq_reason", "unknown"),
+                    },
+                })
+            conn.commit()
+
+        return {
+            "dlq_total": total,
+            "dlq_pc7_test_records": pc7_count,
+            "dlq_unexpected_count": unexpected_count,
+            "dlq_status": dlq_status,
+            "flagged_records": flagged_records,
+        }
+    finally:
+        conn.close()
+
+
 def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> Dict[str, Any]:
     run_id = pipeline_run_id or str(uuid.uuid4())
     run_timestamp = datetime.now(timezone.utc).isoformat()
@@ -119,6 +183,9 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
     else:
         detection_result = detection_eng.run_detect_mode()
     step_c_time = time.time() - step_c_start
+
+    dlq_health = _monitor_dlq()
+    print(f"[correlator] DLQ Watcher — status={dlq_health['dlq_status']} | total={dlq_health['dlq_total']} | pc7={dlq_health['dlq_pc7_test_records']} | unexpected={dlq_health['dlq_unexpected_count']}")
 
     print("[correlator] Step D — kinetic_eng: executing responses...")
     step_d_start = time.time()
@@ -218,6 +285,8 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
             "kinetic_eng_seconds": round(step_d_time, 3),
             "total_seconds": round(step_a_time + step_b_time + step_c_time + step_d_time, 3),
         },
+        "dlq_status": dlq_health["dlq_status"],
+        "dlq_unexpected_count": dlq_health["dlq_unexpected_count"],
         "blueprint_version": BLUEPRINT_VERSION,
         "ecs_version": ECS_VERSION,
     }
@@ -228,6 +297,8 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
     print(f"  Identity records:    {report['records_generated_identity']}")
     print(f"  Correlated records:  {report['records_correlated']}")
     print(f"  DLQ records:         {report['records_dlq']}")
+    print(f"  DLQ status:          {report['dlq_status']}")
+    print(f"  DLQ unexpected:      {report['dlq_unexpected_count']}")
     print(f"  Sigma rules fired:   {report['sigma_rules_unique']}")
     print(f"  Kinetic executions:  {report['kinetic_executions']}")
     print(f"  Avg response (s):    {report['avg_response_seconds']}")
