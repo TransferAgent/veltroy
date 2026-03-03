@@ -62,6 +62,9 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 **Conductor-Owned (Read-Only — No Engineer May Modify):**
 - `oracle/ndr_phase_gate_0_oracle_v2.py` — Phase Gate 0 Oracle Script (Blueprint v1.2). Checks 7 pass conditions (PC1–PC7): PC1 True Positive in ndr-correlated-*, PC2 Detection Latency <60s, PC3 KL-001 SLA <30s, PC4 Pre-Commit Pattern, PC5 Zero DLQ errors, PC6 community_id populated, PC7 Malformed doc → DLQ. Final arbiter of Phase Gate 0 pass/fail.
 
+**Phase Gate 1 Oracle Design** — COMPLETE Sprint 3:
+- `specs/phase-gate-1-oracle-design.md` — Architect AI–authored design specification for the Phase Gate 1 production certification Oracle. 12 pass conditions defined (PC1–PC12): OpenSearch connectivity, live data ingestion, all 5 Sigma rules on live traffic, kinetic playbooks against live AWS, SLA compliance under production load, SOAR tickets in RDS PostgreSQL, DLQ Watcher NOMINAL, DEGRADED heartbeat on real sensors, tenant isolation, adaptive temporal windows on live data, lab_adapter.py absent, audit trail HMAC integrity. Script build deferred to Sprint 4 (Engineer 3). Target: PRODUCTION stage on AWS.
+
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for all data types, ensuring data consistency across modules.
 
