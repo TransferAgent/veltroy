@@ -175,6 +175,15 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
                 if corr_id:
                     _update_correlated_labels(corr_id, {"kl005_response_seconds": rt005})
 
+        if payload.get("severity", "").upper() == "CRITICAL":
+            kl006_result = kinetic_eng.execute_kl006(payload)
+            kinetic_executions.append(kl006_result)
+            if kl006_result.get("status") == "COMPLETE":
+                rt006 = kl006_result.get("response_time_seconds", 0)
+                print(f"  → KL-006 SOAR Ticket | {payload['alert_type']} | {payload['host_ip']} | {rt006}s | SLA={'MET' if kl006_result.get('sla_met') else 'MISSED'}")
+                if corr_id:
+                    _update_correlated_labels(corr_id, {"kl006_response_seconds": rt006})
+
     step_d_time = time.time() - step_d_start
 
     avg_response = round(sum(response_times) / len(response_times), 3) if response_times else 0

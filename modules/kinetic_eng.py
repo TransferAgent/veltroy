@@ -16,6 +16,7 @@ Playbooks:
   - KL-003: Lateral Movement Response (SLA <30s) — revoke lateral ports, SG snapshot, IAM deactivate
   - KL-004: Authentication Spike Response (SLA <30s) — account lock, IAM deactivate, IDENTITY-002 escalation
   - KL-005: AWS Console Anomaly Response (SLA <30s) — IAM session revoke, console expire, off-hours + admin
+  - KL-006: SOAR Ticket Creation (SLA <30s) — any CRITICAL severity → ndr-tickets table (stub for LAB stage)
 
 State machine: PENDING → IN_PROGRESS → ACTION_COMPLETE → COMPLETE / PARTIAL_FAILURE
 """
@@ -36,6 +37,7 @@ KL002_SLA_SECONDS = 5
 KL003_SLA_SECONDS = 30
 KL004_SLA_SECONDS = 30
 KL005_SLA_SECONDS = 30
+KL006_SLA_SECONDS = 30
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "ndr.db")
 
@@ -108,6 +110,14 @@ KL005_ACTIONS = [
     "AUDIT_RECORD_POSTED",
 ]
 
+KL006_ACTIONS = [
+    "STATE_SET_IN_PROGRESS",
+    "TICKET_PAYLOAD_ASSEMBLE",
+    "TICKET_WRITE_NDR_TICKETS",
+    "STATE_SET_ACTION_COMPLETE",
+    "AUDIT_RECORD_POSTED",
+]
+
 _processed_correlation_ids = set()
 
 
@@ -135,6 +145,25 @@ def _init_db():
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_ndr_kinetic_corr_id
         ON "ndr-kinetic" (eng3_correlation_id)
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS "ndr-tickets" (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            ticket_json TEXT NOT NULL,
+            alert_type TEXT,
+            eng3_correlation_id TEXT,
+            severity TEXT,
+            source_ip TEXT,
+            status TEXT DEFAULT 'OPEN',
+            ticket_source TEXT DEFAULT 'SOAR_AUTO',
+            blueprint_version TEXT DEFAULT 'v1.2',
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_ndr_tickets_corr_id
+        ON "ndr-tickets" (eng3_correlation_id)
     """)
     conn.commit()
     conn.close()
@@ -749,6 +778,120 @@ def execute_kl005(payload: Dict[str, Any]) -> Dict[str, Any]:
         "iam_session_revoked": True,
         "console_sessions_expired": True,
         "anomaly_alert_emitted": True,
+        "status_code": 200,
+    }
+
+
+def execute_kl006(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _init_db()
+
+    severity = payload.get("severity", "").upper()
+    if severity != "CRITICAL":
+        return {
+            "status": "SKIPPED",
+            "reason": f"KL-006 requires severity=CRITICAL, got {severity}",
+            "playbook": "KL-006",
+            "status_code": 200,
+        }
+
+    start_time = time.time()
+    ts_received = _now_iso()
+    execution_id = f"KL006-{int(time.time() * 1000)}-{uuid.uuid4().hex[:4]}"
+    corr_id = payload.get("eng3_correlation_id", "")
+    alert_type = payload.get("alert_type", "UNKNOWN")
+    source_ip = payload.get("host_ip", "N/A")
+
+    kl_label_key = {
+        "C2_BEACON": "eng4_kl001_response_seconds",
+        "LATERAL_MOVE": "kl003_response_seconds",
+        "BRUTE_FORCE_SUCCESS": "kl004_response_seconds",
+        "SUSPICIOUS_IAM_KEY_ROTATION": "kl005_response_seconds",
+        "HOST_CARDINALITY_SPIKE": "eng4_kl001_response_seconds",
+    }.get(alert_type.upper(), "eng4_kl001_response_seconds")
+
+    kl_response_value = payload.get("labels", {}).get(kl_label_key, "N/A") if isinstance(payload.get("labels"), dict) else "N/A"
+
+    ticket_id = str(uuid.uuid4())
+    ticket_payload = {
+        "ticket_id": ticket_id,
+        "alert_type": alert_type,
+        "eng3_correlation_id": corr_id,
+        "timestamp": ts_received,
+        "severity": severity,
+        "source_ip": source_ip,
+        "kl_response_seconds_label": kl_label_key,
+        "kl_response_seconds_value": kl_response_value,
+        "blueprint_version": BLUEPRINT_VERSION,
+        "ticket_source": "SOAR_AUTO",
+        "status": "OPEN",
+    }
+
+    actions_completed = simulate_actions(KL006_ACTIONS)
+    elapsed_ms = int((time.time() - start_time) * 1000) + random.randint(50, 500)
+    response_seconds = round(elapsed_ms / 1000, 3)
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            'INSERT OR IGNORE INTO "ndr-tickets" (id, timestamp, ticket_json, alert_type, eng3_correlation_id, severity, source_ip, status, ticket_source, blueprint_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                ticket_id,
+                ts_received,
+                json.dumps(ticket_payload),
+                alert_type,
+                corr_id,
+                severity,
+                source_ip,
+                "OPEN",
+                "SOAR_AUTO",
+                BLUEPRINT_VERSION,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    execution = {
+        "execution_id": execution_id,
+        "playbook_id": "KL-006",
+        "schema_version": "1.2",
+        "@timestamp": ts_received,
+        "state": "COMPLETE",
+        "response_tier": "KL006_SOAR_TICKET",
+        "host_ip": source_ip,
+        "alert_type": alert_type,
+        "eng3_correlation_id": corr_id,
+        "ticket_id": ticket_id,
+        "ticket_payload": ticket_payload,
+        "actions_expected": KL006_ACTIONS,
+        "actions_completed": actions_completed,
+        "timestamps": {
+            "alert_received": ts_received,
+            "state_in_progress": ts_received,
+            "action_completed": _now_iso(),
+            "response_time_ms": elapsed_ms,
+            "sla_met": elapsed_ms < (KL006_SLA_SECONDS * 1000),
+        },
+        "labels": {
+            "kl006_response_seconds": response_seconds,
+            "blueprint_version": BLUEPRINT_VERSION,
+            "module": "kinetic_eng",
+        },
+        "rollback_eligible": True,
+        "ndr": {"blueprint_version": BLUEPRINT_VERSION},
+    }
+
+    _write_kinetic_record(execution, "KL-006", "KL006_SOAR_TICKET",
+                          payload, elapsed_ms, KL006_SLA_SECONDS)
+
+    return {
+        "status": "COMPLETE",
+        "execution_id": execution_id,
+        "playbook": "KL-006",
+        "ticket_id": ticket_id,
+        "response_time_seconds": response_seconds,
+        "sla_met": elapsed_ms < (KL006_SLA_SECONDS * 1000),
+        "actions_completed": len(actions_completed),
         "status_code": 200,
     }
 
