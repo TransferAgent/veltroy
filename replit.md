@@ -47,6 +47,11 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
     - **KL-001 Automated Host Isolation**: Tier-based circuit breaker, bidirectional security group isolation, IAM kill switch, atomic pre-commit audit with execution state machine (PENDING → IN_PROGRESS → COMPLETE). Signed Interface Contract v1.2 (draft-07 JSON Schema, 14 fields: 11 required + 3 optional, additionalProperties: false, strict patterns for sg-id/AKIA key/aws-region).
     - **KL-002 IAM Kill Switch**: Standalone IAM credential containment with a target SLA of < 5 seconds for key deactivation, triggered by specific IAM-related alerts. Includes actions like IAM key deactivation, enumeration, deny policy attachment, and session invalidation.
     - **KL-ROLLBACK-001 Rollback Protocol**: Human-gated operation to reverse actions from KL-001 or KL-002, supporting dry run mode and tracking 5 rollback actions.
+    - **Python Module** (`modules/kinetic_eng.py`): KL-001 host isolation (TIER_0_SUPPRESS/TIER_1_ISOLATE/TIER_2_ESCALATE/TIER_3_EMERGENCY), KL-002 IAM Kill Switch, 11-field Interface Contract validation, simulated SG revoke/IAM deactivate/memory preserve/SOC notification actions, state machine (PENDING→IN_PROGRESS→COMPLETE), SLA tracking (<30s KL-001, <5s KL-002). Writes to SQLite `data/ndr.db` table `ndr-kinetic`.
+
+**Orchestration Layer:**
+- `glue/correlator.py`: Thin Bus Wire — calls all 4 modules in sequence (network_eng → identity_eng → detection_eng → kinetic_eng). Exposes `run_pipeline()`, `get_stats()`, `get_health()`. No detection logic — calls only.
+- `main.py`: Flask Bus on port 5000 — POST /run, GET /stats, GET /health endpoints for Oracle and external access.
 
 **Conductor-Owned (Read-Only — No Engineer May Modify):**
 - `oracle/ndr_phase_gate_0_oracle_v2.py` — Phase Gate 0 Oracle Script (Blueprint v1.2). Checks 7 pass conditions (PC1–PC7): PC1 True Positive in ndr-correlated-*, PC2 Detection Latency <60s, PC3 KL-001 SLA <30s, PC4 Pre-Commit Pattern, PC5 Zero DLQ errors, PC6 community_id populated, PC7 Malformed doc → DLQ. Final arbiter of Phase Gate 0 pass/fail.

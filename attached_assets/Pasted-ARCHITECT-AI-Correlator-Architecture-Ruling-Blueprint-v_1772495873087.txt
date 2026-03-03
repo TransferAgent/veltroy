@@ -1,0 +1,42 @@
+ARCHITECT AI — Correlator Architecture Ruling (Blueprint v1.2)
+Replit's Interpretation 1 is correct. detection_eng.py is NOT being replaced or renamed. Both files are required. Here is the definitive separation of concerns:
+
+Architectural Boundary
+Module	Role	Owns
+modules/detection_eng.py	The Brain — all logic and processing	ECS validation, JOIN, Sigma rules, pre-commit, Eng4 payload
+modules/kinetic_eng.py	The Fist — all kinetic response	SG isolation, IAM kill, state machine, audit
+glue/correlator.py	The Bus Wire — thin orchestration only	Calls all 4 modules in sequence, exposes Flask endpoints, tags pipeline runs
+detection_eng.py is complete and untouched. correlator.py does NOT replicate its logic. It only calls it.
+
+Verbatim Build Instruction for Replit
+Send this to Replit now:
+
+Build glue/correlator.py as a thin orchestration layer only. Do NOT replicate any logic from detection_eng.py or kinetic_eng.py. This file calls the four existing modules in sequence and wires them to the Flask Bus in main.py.
+
+glue/correlator.py must:
+
+Import network_eng, identity_eng, detection_eng, kinetic_eng from the modules directory.
+
+Define a single run_pipeline(pipeline_run_id, mode="test") function that executes in this exact sequence:
+
+Step A → Call network_eng to generate traffic events → writes to ndr-network
+Step B → Call identity_eng to generate identity events → writes to ndr-identity
+Step C → Call detection_eng to run the full 5-operation pipeline (ECS validation → JOIN → Sigma → pre-commit → Eng4 payload) → writes to ndr-correlated and ndr-dlq
+Step D → For each record in ndr-correlated, call kinetic_eng with the 11-field payload → records response time in labels.eng4_kl001_response_seconds
+Step E → Return a structured pipeline report: {pipeline_run_id, timestamp, records_generated_network, records_generated_identity, records_correlated, records_dlq, sigma_rules_fired[], kinetic_executions, avg_response_seconds, blueprint_version: "v1.2"}
+Wire into main.py Flask Bus (port 5000) — expose three endpoints:
+
+POST /run → calls run_pipeline(), returns the Step E report as JSON
+GET /stats → queries all four tables (ndr-network, ndr-identity, ndr-correlated, ndr-dlq) and returns record counts plus last pipeline run summary
+GET /health → returns {status: "ok", platform_version: "v1.2", ecs_version: "8.11.0", modules: ["network_eng", "identity_eng", "detection_eng", "kinetic_eng", "correlator"], oracle_ready: true}
+Tag every pipeline run with pipeline_run_id (UUID), blueprint_version: "v1.2", run_timestamp (ISO-8601).
+
+No new detection logic. No new Sigma rules. No new JOIN logic. Call existing modules only.
+
+Report back with: confirmation that glue/correlator.py exists, main.py exposes all three endpoints, and a test call to GET /health returns 200 OK with the correct payload.
+
+Why Both Files Are Required
+The Oracle script ndr_phase_gate_0_oracle_v2.py will call POST /run on the Flask Bus to trigger the full synthetic pipeline during Live Fire. Without correlator.py wiring the endpoints, the Oracle has no entry point. detection_eng.py holds the intelligence; correlator.py is the ignition switch.
+
+After Correlator Confirmed → Phase Gate 0
+Once Replit confirms the three endpoints are live, the only remaining action is the Alpha Leader GO-ORDER to run the Oracle. Platform certification is one step away.
