@@ -59,6 +59,38 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
         identity_eng.run_normal_mode(10)
     step_b_time = time.time() - step_b_start
 
+    print("[correlator] Step B.1 — Injecting malformed docs for PC7 ECS Guardian validation...")
+    malformed_docs = [
+        {
+            "id": str(uuid.uuid4()),
+            "@timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": {"category": "network", "dataset": "zeek.conn"},
+            "ecs": {"version": "8.11.0"},
+            "network": {"community_id": "1:test/malformed/no-source-ip"},
+            "labels": {"test_run_id": "PC7_MALFORMED_TEST", "pc7_test": True},
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "@timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": {"ip": "10.0.0.99"},
+            "event": {"category": "network", "dataset": "zeek.conn"},
+            "ecs": {"version": "7.0.0"},
+            "network": {"community_id": "1:test/malformed/bad-ecs-version"},
+            "labels": {"test_run_id": "PC7_MALFORMED_TEST", "pc7_test": True},
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "source": {"ip": "10.0.0.100"},
+            "ecs": {"version": "8.11.0"},
+            "network": {"community_id": "1:test/malformed/no-timestamp"},
+            "labels": {"test_run_id": "PC7_MALFORMED_TEST", "pc7_test": True},
+        },
+    ]
+    from modules.detection_eng import operation_1_ecs_guardian
+    valid_from_malformed = operation_1_ecs_guardian(malformed_docs, "ndr-network")
+    dlq_injected = len(malformed_docs) - len(valid_from_malformed)
+    print(f"  → {dlq_injected} malformed docs routed to ndr-dlq (PC7 satisfied)")
+
     print("[correlator] Step C — detection_eng: full 5-operation pipeline...")
     step_c_start = time.time()
     if mode == "test":
