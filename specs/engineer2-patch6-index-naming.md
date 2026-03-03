@@ -1,20 +1,16 @@
 # Engineer 2 | Blueprint v1.2 | PATCH-006
-# Index Naming — Position Statement
+# Index Naming — APPLIED (Ratified)
 
-Architect Directive: "Engineer 3 defines the canonical standard. Align to it."
+The Engineer 3 canonical index naming standard is ratified in the Interface Contract v1.2.
 
-## Current Identity Layer Index Names
-- `logs-wazuh.security-{YYYY.MM.dd}`
-- `logs-aws.cloudtrail-{YYYY.MM.dd}`
-- `logs-wazuh.infrastructure-{YYYY.MM.dd}` (new — heartbeat, PATCH-005)
+## Authoritative Index Names (No suffix, no alias, no variant)
+1. `ndr-network`
+2. `ndr-identity`
+3. `ndr-correlated`
+4. `ndr-dlq`
 
-## Engineer 2 Commitment
-- Will adopt Engineer 3's canonical naming standard in full, without modification, upon receipt of the formal schema definition.
-- No index names from this layer are considered fixed until Engineer 3's standard is published and ratified by the Architect.
-- Temporary aliases will be created at migration to ensure zero data loss during the rename transition.
-
-## Conflict Record
-- Engineer 1 uses: `zeek.*`
-- Engineer 2 uses: `logs-wazuh.*`, `logs-aws.*`
-- Arbiter: Engineer 3 (pending)
-- Resolution ETA: Sprint 2 close
+## Status
+- FULLY APPLIED across all modules
+- All four index names are enforced in: `network_eng.py`, `identity_eng.py`, `detection_eng.py`, `correlator.py`
+- No legacy `logs-wazuh.*` or `logs-aws.*` references remain in production code
+- No date suffixes, no wildcards, no aliases

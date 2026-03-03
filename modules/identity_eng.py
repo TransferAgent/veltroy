@@ -18,7 +18,7 @@ Alert conditions (IDENTITY-001 through IDENTITY-008):
   004: AWS ConsoleLogin from new IP
   005: IAM privilege escalation via AttachUserPolicy (CRITICAL)
   006 v2: Compound behavioral — off-hours AND new country AND new host
-  007: Wazuh agent SILENT (>5min disconnect, dataset=wazuh.agent_health)
+  007: Wazuh agent SILENT (>90s disconnect, dataset=wazuh.agent_health)
   008: Wazuh agent FLAPPING (multiple disconnects in 1hr)
 
 GeoIP: Three-layer simulation (MaxMind primary, ASN always, reputation scoring)
@@ -711,7 +711,7 @@ def _trigger_identity_007(test_run_id: Optional[str] = None) -> Dict[str, Any]:
             "id": f"WZH-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{random.randint(100000, 999999):06d}",
             "reason": (
                 f"IDENTITY-007: Wazuh agent {agent_name} [ID: {agent_id}] "
-                f"has gone SILENT. Identity telemetry gap on host {hostname}. "
+                f"has gone SILENT (>90s). Identity telemetry gap on host {hostname}. "
                 f"community_id correlation NOW DEGRADED for this endpoint."
             ),
         },
@@ -743,7 +743,7 @@ def _trigger_identity_007(test_run_id: Optional[str] = None) -> Dict[str, Any]:
             "community_id": compute_community_id(d_ip, 0, "0.0.0.0", 0, 6),
         },
         "message": (
-            f"Agent {agent_name} (ID: {agent_id}) has not reported in 300+ seconds. "
+            f"Agent {agent_name} (ID: {agent_id}) has not reported in 90+ seconds. "
             f"Host {hostname} identity telemetry is now degraded."
         ),
         "tags": [

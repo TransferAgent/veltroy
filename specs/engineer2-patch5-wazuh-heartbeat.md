@@ -8,8 +8,8 @@ Architect Directive: "If a Wazuh agent goes silent, we need to know."
 ```xml
 <ossec_config>
   <global>
-    <agents_disconnection_time>300</agents_disconnection_time>
-    <agents_disconnection_alert_time>300</agents_disconnection_alert_time>
+    <agents_disconnection_time>90</agents_disconnection_time>
+    <agents_disconnection_alert_time>90</agents_disconnection_alert_time>
   </global>
 </ossec_config>
 ```
@@ -18,7 +18,7 @@ Architect Directive: "If a Wazuh agent goes silent, we need to know."
 
 ### IDENTITY-007: Agent Silent Alert (rule id 100300, level 12)
 - Trigger: Wazuh agent disconnected (base rule 502)
-- Fires when agent is silent for > 5 minutes
+- Fires when agent is silent for > 90 seconds
 - ECS mapping: `event.kind = alert`, `event.category = host`
 - Description: Agent has gone SILENT. Identity telemetry gap on host. Community_id correlation NOW DEGRADED for this endpoint.
 - Dataset: `wazuh.agent_health`
