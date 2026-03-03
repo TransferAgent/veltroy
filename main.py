@@ -121,7 +121,7 @@ def state_kinetic():
     if not state:
         return jsonify({"error": "state is required"}), 400
 
-    valid_states = ["PENDING", "IN_PROGRESS", "COMPLETE", "FAILED", "ROLLED_BACK"]
+    valid_states = ["PENDING", "IN_PROGRESS", "ACTION_COMPLETE", "COMPLETE", "FAILED", "PARTIAL_FAILURE", "ROLLED_BACK"]
     if state not in valid_states:
         return jsonify({"error": f"state must be one of: {valid_states}"}), 400
 

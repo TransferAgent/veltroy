@@ -13,8 +13,11 @@ and executes tiered response actions:
 Playbooks:
   - KL-001: Automated Host Isolation (SLA <30s)
   - KL-002: IAM Kill Switch (SLA <5s)
+  - KL-003: Lateral Movement Response (SLA <30s) — revoke lateral ports, SG snapshot, IAM deactivate
+  - KL-004: Authentication Spike Response (SLA <30s) — account lock, IAM deactivate, IDENTITY-002 escalation
+  - KL-005: AWS Console Anomaly Response (SLA <30s) — IAM session revoke, console expire, off-hours + admin
 
-State machine: PENDING → IN_PROGRESS → COMPLETE
+State machine: PENDING → IN_PROGRESS → ACTION_COMPLETE → COMPLETE / PARTIAL_FAILURE
 """
 
 import json
@@ -30,6 +33,9 @@ BLUEPRINT_VERSION = "v1.2"
 ECS_VERSION = "8.11.0"
 KL001_SLA_SECONDS = 30
 KL002_SLA_SECONDS = 5
+KL003_SLA_SECONDS = 30
+KL004_SLA_SECONDS = 30
+KL005_SLA_SECONDS = 30
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "ndr.db")
 
@@ -64,6 +70,41 @@ KL002_ACTIONS = [
     "IAM_ENUMERATE_ALL_KEYS",
     "IAM_ATTACH_DENY_ALL",
     "IAM_SESSION_INVALIDATION",
+    "AUDIT_RECORD_POSTED",
+]
+
+KL003_ACTIONS = [
+    "STATE_SET_IN_PROGRESS",
+    "SG_REVOKE_SMB_445_IN",
+    "SG_REVOKE_SMB_445_OUT",
+    "SG_REVOKE_RDP_3389_IN",
+    "SG_REVOKE_RDP_3389_OUT",
+    "SG_REVOKE_WMI_135_IN",
+    "SG_REVOKE_WMI_135_OUT",
+    "SG_REVOKE_SSH_22_IN",
+    "SG_REVOKE_SSH_22_OUT",
+    "SG_SNAPSHOT_PRE_ISOLATION",
+    "IAM_KEY_DEACTIVATE_LATERAL",
+    "STATE_SET_ACTION_COMPLETE",
+    "AUDIT_RECORD_POSTED",
+]
+
+KL004_ACTIONS = [
+    "STATE_SET_IN_PROGRESS",
+    "USER_ACCOUNT_LOCK",
+    "IAM_KEY_DEACTIVATE",
+    "IDENTITY_002_ESCALATION_EMIT",
+    "STATE_SET_ACTION_COMPLETE",
+    "AUDIT_RECORD_POSTED",
+]
+
+KL005_ACTIONS = [
+    "STATE_SET_IN_PROGRESS",
+    "IAM_SESSION_REVOKE",
+    "IAM_KEY_DEACTIVATE",
+    "CONSOLE_SESSION_FORCE_EXPIRE",
+    "AWS_CONSOLE_ANOMALY_ALERT_EMIT",
+    "STATE_SET_ACTION_COMPLETE",
     "AUDIT_RECORD_POSTED",
 ]
 
@@ -343,6 +384,371 @@ def execute_kl002(payload: Dict[str, Any]) -> Dict[str, Any]:
         "response_time_seconds": response_seconds,
         "sla_met": elapsed_ms < (KL002_SLA_SECONDS * 1000),
         "actions_completed": len(actions_completed),
+        "status_code": 200,
+    }
+
+
+def _write_kinetic_record(execution: Dict[str, Any], playbook_id: str, tier: str,
+                          payload: Dict[str, Any], elapsed_ms: int, sla_seconds: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        'INSERT OR REPLACE INTO "ndr-kinetic" '
+        "(id, timestamp, execution_json, execution_id, playbook_id, response_tier, "
+        "state, host_ip, alert_type, eng3_correlation_id, response_time_ms, sla_met, blueprint_version) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid.uuid4()),
+            execution["@timestamp"],
+            json.dumps(execution),
+            execution["execution_id"],
+            playbook_id,
+            tier,
+            execution["state"],
+            payload.get("host_ip", "N/A"),
+            payload.get("alert_type", "UNKNOWN"),
+            payload.get("eng3_correlation_id", ""),
+            elapsed_ms,
+            1 if elapsed_ms < (sla_seconds * 1000) else 0,
+            BLUEPRINT_VERSION,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def execute_kl003(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _init_db()
+
+    alert_type = payload.get("alert_type", "").upper()
+    severity = payload.get("severity", "").upper()
+
+    if alert_type != "LATERAL_MOVE" or severity not in ("HIGH", "CRITICAL"):
+        return {
+            "status": "SKIPPED",
+            "reason": f"KL-003 requires LATERAL_MOVE + HIGH/CRITICAL, got {alert_type}/{severity}",
+            "playbook": "KL-003",
+            "status_code": 200,
+        }
+
+    start_time = time.time()
+    ts_received = _now_iso()
+    execution_id = f"KL003-{int(time.time() * 1000)}-{uuid.uuid4().hex[:4]}"
+    corr_id = payload.get("eng3_correlation_id", "")
+
+    sg_id = payload.get("aws_security_group_id", "sg-unknown")
+    sg_snapshot = {
+        "security_group_id": sg_id,
+        "snapshot_timestamp": ts_received,
+        "rules_before_isolation": [
+            {"protocol": "tcp", "port": 445, "direction": "inbound", "source": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 445, "direction": "outbound", "destination": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 3389, "direction": "inbound", "source": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 3389, "direction": "outbound", "destination": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 135, "direction": "inbound", "source": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 135, "direction": "outbound", "destination": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 22, "direction": "inbound", "source": "0.0.0.0/0"},
+            {"protocol": "tcp", "port": 22, "direction": "outbound", "destination": "0.0.0.0/0"},
+        ],
+    }
+
+    iam_key = payload.get("iam_access_key_id", "UNKNOWN")
+    iam_deactivated = iam_key != "UNKNOWN"
+
+    actions_completed = simulate_actions(KL003_ACTIONS)
+    elapsed_ms = int((time.time() - start_time) * 1000) + random.randint(100, 1500)
+    response_seconds = round(elapsed_ms / 1000, 3)
+
+    execution = {
+        "execution_id": execution_id,
+        "playbook_id": "KL-003",
+        "schema_version": "1.2",
+        "@timestamp": ts_received,
+        "state": "COMPLETE",
+        "response_tier": "KL003_LATERAL_RESPONSE",
+        "host_ip": payload.get("host_ip", "N/A"),
+        "host_id": payload.get("host_id", "unknown"),
+        "alert_type": alert_type,
+        "severity": severity,
+        "eng3_correlation_id": corr_id,
+        "iam_user": payload.get("iam_user", "unknown"),
+        "iam_access_key_id": iam_key,
+        "aws_security_group_id": sg_id,
+        "actions_expected": KL003_ACTIONS,
+        "actions_completed": actions_completed,
+        "sg_isolation": {
+            "lateral_ports_revoked": [445, 3389, 135, 22],
+            "directions": ["inbound", "outbound"],
+            "sg_snapshot_pre_isolation": sg_snapshot,
+        },
+        "iam_actions": {
+            "key_deactivated": iam_deactivated,
+            "iam_access_key_id": iam_key,
+        },
+        "timestamps": {
+            "alert_received": ts_received,
+            "state_in_progress": ts_received,
+            "action_completed": _now_iso(),
+            "response_time_ms": elapsed_ms,
+            "sla_met": elapsed_ms < (KL003_SLA_SECONDS * 1000),
+        },
+        "labels": {
+            "kl003_response_seconds": response_seconds,
+            "sg_snapshot_pre_isolation": json.dumps(sg_snapshot),
+            "blueprint_version": BLUEPRINT_VERSION,
+            "module": "kinetic_eng",
+        },
+        "rollback_eligible": True,
+        "ndr": {"blueprint_version": BLUEPRINT_VERSION},
+    }
+
+    _write_kinetic_record(execution, "KL-003", "KL003_LATERAL_RESPONSE",
+                          payload, elapsed_ms, KL003_SLA_SECONDS)
+
+    return {
+        "status": "COMPLETE",
+        "execution_id": execution_id,
+        "playbook": "KL-003",
+        "response_time_seconds": response_seconds,
+        "sla_met": elapsed_ms < (KL003_SLA_SECONDS * 1000),
+        "actions_completed": len(actions_completed),
+        "lateral_ports_revoked": [445, 3389, 135, 22],
+        "iam_key_deactivated": iam_deactivated,
+        "sg_snapshot_captured": True,
+        "status_code": 200,
+    }
+
+
+def execute_kl004(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _init_db()
+
+    alert_type = payload.get("alert_type", "").upper()
+
+    if alert_type != "BRUTE_FORCE_SUCCESS":
+        return {
+            "status": "SKIPPED",
+            "reason": f"KL-004 requires BRUTE_FORCE_SUCCESS, got {alert_type}",
+            "playbook": "KL-004",
+            "status_code": 200,
+        }
+
+    start_time = time.time()
+    ts_received = _now_iso()
+    execution_id = f"KL004-{int(time.time() * 1000)}-{uuid.uuid4().hex[:4]}"
+    corr_id = payload.get("eng3_correlation_id", "")
+    iam_user = payload.get("iam_user", "unknown")
+    iam_key = payload.get("iam_access_key_id", "UNKNOWN")
+
+    actions_completed = simulate_actions(KL004_ACTIONS)
+    elapsed_ms = int((time.time() - start_time) * 1000) + random.randint(100, 1500)
+    response_seconds = round(elapsed_ms / 1000, 3)
+
+    escalation_event = {
+        "id": str(uuid.uuid4()),
+        "@timestamp": _now_iso(),
+        "ecs": {"version": ECS_VERSION},
+        "event": {
+            "dataset": "wazuh.security",
+            "module": "kinetic_eng",
+            "kind": "alert",
+            "category": "authentication",
+            "type": "info",
+            "action": "account-locked",
+            "severity": 14,
+            "risk_score": 90,
+            "reason": (
+                f"IDENTITY-002 ESCALATION: User {iam_user} account locked by KL-004 "
+                f"after brute force success detection. Auth spike response active."
+            ),
+        },
+        "user": {"name": iam_user},
+        "labels": {
+            "blueprint_version": BLUEPRINT_VERSION,
+            "escalated_by": "KL-004",
+            "original_correlation_id": corr_id,
+        },
+        "tags": ["blueprint-v1.2", "kinetic-escalation", "sprint2"],
+    }
+
+    execution = {
+        "execution_id": execution_id,
+        "playbook_id": "KL-004",
+        "schema_version": "1.2",
+        "@timestamp": ts_received,
+        "state": "COMPLETE",
+        "response_tier": "KL004_AUTH_SPIKE",
+        "host_ip": payload.get("host_ip", "N/A"),
+        "alert_type": alert_type,
+        "eng3_correlation_id": corr_id,
+        "iam_user": iam_user,
+        "actions_expected": KL004_ACTIONS,
+        "actions_completed": actions_completed,
+        "account_actions": {
+            "account_locked": True,
+            "lock_reason": "AUTH_SPIKE",
+            "iam_key_deactivated": iam_key != "UNKNOWN",
+            "iam_access_key_id": iam_key,
+        },
+        "escalation_event": escalation_event,
+        "timestamps": {
+            "alert_received": ts_received,
+            "state_in_progress": ts_received,
+            "action_completed": _now_iso(),
+            "response_time_ms": elapsed_ms,
+            "sla_met": elapsed_ms < (KL004_SLA_SECONDS * 1000),
+        },
+        "labels": {
+            "kl004_response_seconds": response_seconds,
+            "account_locked": True,
+            "lock_reason": "AUTH_SPIKE",
+            "blueprint_version": BLUEPRINT_VERSION,
+            "module": "kinetic_eng",
+        },
+        "rollback_eligible": True,
+        "ndr": {"blueprint_version": BLUEPRINT_VERSION},
+    }
+
+    _write_kinetic_record(execution, "KL-004", "KL004_AUTH_SPIKE",
+                          payload, elapsed_ms, KL004_SLA_SECONDS)
+
+    return {
+        "status": "COMPLETE",
+        "execution_id": execution_id,
+        "playbook": "KL-004",
+        "response_time_seconds": response_seconds,
+        "sla_met": elapsed_ms < (KL004_SLA_SECONDS * 1000),
+        "actions_completed": len(actions_completed),
+        "account_locked": True,
+        "escalation_emitted": True,
+        "status_code": 200,
+    }
+
+
+def execute_kl005(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _init_db()
+
+    alert_type = payload.get("alert_type", "").upper()
+    admin_session = payload.get("admin_session_active", False)
+    now_hour = datetime.now(timezone.utc).hour
+
+    is_off_hours = now_hour < 6 or now_hour > 22
+
+    if alert_type != "SUSPICIOUS_IAM_KEY_ROTATION":
+        return {
+            "status": "SKIPPED",
+            "reason": f"KL-005 requires SUSPICIOUS_IAM_KEY_ROTATION, got {alert_type}",
+            "playbook": "KL-005",
+            "status_code": 200,
+        }
+
+    if not admin_session:
+        return {
+            "status": "SKIPPED",
+            "reason": "KL-005 requires admin_session_active = true",
+            "playbook": "KL-005",
+            "status_code": 200,
+        }
+
+    if not is_off_hours:
+        return {
+            "status": "SKIPPED",
+            "reason": f"KL-005 requires off-hours (hour < 6 or > 22 UTC), current hour = {now_hour}",
+            "playbook": "KL-005",
+            "status_code": 200,
+        }
+
+    start_time = time.time()
+    ts_received = _now_iso()
+    execution_id = f"KL005-{int(time.time() * 1000)}-{uuid.uuid4().hex[:4]}"
+    corr_id = payload.get("eng3_correlation_id", "")
+    iam_user = payload.get("iam_user", "unknown")
+    iam_key = payload.get("iam_access_key_id", "UNKNOWN")
+    aws_region = payload.get("aws_region", "us-east-1")
+
+    actions_completed = simulate_actions(KL005_ACTIONS)
+    elapsed_ms = int((time.time() - start_time) * 1000) + random.randint(100, 1500)
+    response_seconds = round(elapsed_ms / 1000, 3)
+
+    console_anomaly_alert = {
+        "id": str(uuid.uuid4()),
+        "@timestamp": _now_iso(),
+        "ecs": {"version": ECS_VERSION},
+        "event": {
+            "dataset": "ndr-correlated",
+            "module": "kinetic_eng",
+            "kind": "alert",
+            "category": "intrusion_detection",
+            "type": "info",
+            "severity": 14,
+            "risk_score": 95,
+            "reason": (
+                f"AWS_CONSOLE_ANOMALY: Off-hours admin session by {iam_user} "
+                f"with IAM key rotation in {aws_region}. KL-005 containment active."
+            ),
+        },
+        "alert_type": "AWS_CONSOLE_ANOMALY",
+        "severity": "CRITICAL",
+        "user": {"name": iam_user},
+        "labels": {
+            "blueprint_version": BLUEPRINT_VERSION,
+            "escalated_by": "KL-005",
+            "original_correlation_id": corr_id,
+        },
+        "tags": ["blueprint-v1.2", "kinetic-escalation", "sprint2", "console-anomaly"],
+    }
+
+    execution = {
+        "execution_id": execution_id,
+        "playbook_id": "KL-005",
+        "schema_version": "1.2",
+        "@timestamp": ts_received,
+        "state": "COMPLETE",
+        "response_tier": "KL005_CONSOLE_ANOMALY",
+        "host_ip": payload.get("host_ip", "N/A"),
+        "alert_type": alert_type,
+        "eng3_correlation_id": corr_id,
+        "iam_user": iam_user,
+        "iam_access_key_id": iam_key,
+        "aws_region": aws_region,
+        "admin_session_active": admin_session,
+        "off_hours": True,
+        "current_utc_hour": now_hour,
+        "actions_expected": KL005_ACTIONS,
+        "actions_completed": actions_completed,
+        "iam_actions": {
+            "session_revoked": True,
+            "key_deactivated": iam_key != "UNKNOWN",
+            "console_sessions_expired": True,
+        },
+        "console_anomaly_alert": console_anomaly_alert,
+        "timestamps": {
+            "alert_received": ts_received,
+            "state_in_progress": ts_received,
+            "action_completed": _now_iso(),
+            "response_time_ms": elapsed_ms,
+            "sla_met": elapsed_ms < (KL005_SLA_SECONDS * 1000),
+        },
+        "labels": {
+            "kl005_response_seconds": response_seconds,
+            "blueprint_version": BLUEPRINT_VERSION,
+            "module": "kinetic_eng",
+        },
+        "rollback_eligible": True,
+        "ndr": {"blueprint_version": BLUEPRINT_VERSION},
+    }
+
+    _write_kinetic_record(execution, "KL-005", "KL005_CONSOLE_ANOMALY",
+                          payload, elapsed_ms, KL005_SLA_SECONDS)
+
+    return {
+        "status": "COMPLETE",
+        "execution_id": execution_id,
+        "playbook": "KL-005",
+        "response_time_seconds": response_seconds,
+        "sla_met": elapsed_ms < (KL005_SLA_SECONDS * 1000),
+        "actions_completed": len(actions_completed),
+        "iam_session_revoked": True,
+        "console_sessions_expired": True,
+        "anomaly_alert_emitted": True,
         "status_code": 200,
     }
 

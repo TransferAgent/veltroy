@@ -1,0 +1,35 @@
+KL-003/004/005 Build Instruction — Send to Replit Now
+"Build three new kinetic playbooks in modules/kinetic_eng.py using the existing KL-001/KL-002 pattern as the template. Add them as distinct response functions alongside the existing tier logic. Do not modify existing KL-001 or KL-002 logic.
+
+KL-003 — Lateral Movement Response Trigger: alert_type = LATERAL_MOVE AND severity = HIGH or CRITICAL Actions in sequence:
+
+Call POST /v1/state/kinetic to set state = IN_PROGRESS
+Revoke all lateral protocol ports on the host's security group (SMB/445, RDP/3389, WMI/135, SSH/22) — inbound AND outbound
+Disable the IAM key associated with the lateral session (if iam_access_key_id ≠ UNKNOWN)
+Capture a SG pre-isolation rule snapshot — store as labels.sg_snapshot_pre_isolation in the correlated record (this satisfies the rollback fidelity requirement)
+Call POST /v1/state/kinetic to set state = ACTION_COMPLETE
+Record labels.kl003_response_seconds (float, 3dp). Target < 30s.
+KL-004 — Authentication Spike Response Trigger: alert_type = BRUTE_FORCE_SUCCESS AND failure count > 3 within 60s Actions in sequence:
+
+Call POST /v1/state/kinetic to set state = IN_PROGRESS
+Lock the targeted user account — set labels.account_locked = true and labels.lock_reason = AUTH_SPIKE
+Disable the IAM access key if present
+Emit a IDENTITY-002 escalation event to ndr-identity with event.kind = alert, severity = CRITICAL
+Call POST /v1/state/kinetic to set state = ACTION_COMPLETE
+Record labels.kl004_response_seconds (float, 3dp). Target < 30s.
+KL-005 — AWS Console Anomaly Response Trigger: alert_type = SUSPICIOUS_IAM_KEY_ROTATION AND admin_session_active = true AND off-hours (hour < 6 OR hour > 22 UTC) Actions in sequence:
+
+Call POST /v1/state/kinetic to set state = IN_PROGRESS
+Revoke the anomalous IAM session (disable access key via KL-002 logic)
+Force-expire any active console sessions for the affected IAM user
+Emit an AWS_CONSOLE_ANOMALY alert to ndr-correlated with severity = CRITICAL
+Call POST /v1/state/kinetic to set state = ACTION_COMPLETE
+Record labels.kl005_response_seconds (float, 3dp). Target < 30s.
+For all three playbooks:
+
+Pre-commit audit write BEFORE any action (pre_commit_written = true)
+State machine: PENDING → IN_PROGRESS → ACTION_COMPLETE → COMPLETE / PARTIAL_FAILURE
+Tag all output: blueprint_version = v1.2, module = kinetic_eng
+Support Test mode — fire all three playbooks in one run
+Rollback eligible via POST /v1/audit/kinetic/rollback + KL-ROLLBACK-001 token
+After build, run Test mode and confirm: KL-003 fires on LATERAL_MOVE, KL-004 fires on BRUTE_FORCE_SUCCESS, KL-005 fires on SUSPICIOUS_IAM_KEY_ROTATION + admin_session + off-hours. All three SLA timers < 30s. Report back."

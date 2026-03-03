@@ -148,6 +148,33 @@ def run_pipeline(pipeline_run_id: Optional[str] = None, mode: str = "test") -> D
             if kl002_result.get("status") == "COMPLETE":
                 print(f"  → KL-002 IAM Kill | {payload['iam_user']} | {kl002_result.get('response_time_seconds')}s")
 
+        if payload.get("alert_type") == "LATERAL_MOVE":
+            kl003_result = kinetic_eng.execute_kl003(payload)
+            kinetic_executions.append(kl003_result)
+            if kl003_result.get("status") == "COMPLETE":
+                rt003 = kl003_result.get("response_time_seconds", 0)
+                print(f"  → KL-003 Lateral Response | {payload['host_ip']} | {rt003}s | SLA={'MET' if kl003_result.get('sla_met') else 'MISSED'}")
+                if corr_id:
+                    _update_correlated_labels(corr_id, {"kl003_response_seconds": rt003})
+
+        if payload.get("alert_type") == "BRUTE_FORCE_SUCCESS":
+            kl004_result = kinetic_eng.execute_kl004(payload)
+            kinetic_executions.append(kl004_result)
+            if kl004_result.get("status") == "COMPLETE":
+                rt004 = kl004_result.get("response_time_seconds", 0)
+                print(f"  → KL-004 Auth Spike | {payload['iam_user']} | {rt004}s | SLA={'MET' if kl004_result.get('sla_met') else 'MISSED'}")
+                if corr_id:
+                    _update_correlated_labels(corr_id, {"kl004_response_seconds": rt004})
+
+        if payload.get("alert_type") == "SUSPICIOUS_IAM_KEY_ROTATION":
+            kl005_result = kinetic_eng.execute_kl005(payload)
+            kinetic_executions.append(kl005_result)
+            if kl005_result.get("status") == "COMPLETE":
+                rt005 = kl005_result.get("response_time_seconds", 0)
+                print(f"  → KL-005 Console Anomaly | {payload['iam_user']} | {rt005}s | SLA={'MET' if kl005_result.get('sla_met') else 'MISSED'}")
+                if corr_id:
+                    _update_correlated_labels(corr_id, {"kl005_response_seconds": rt005})
+
     step_d_time = time.time() - step_d_start
 
     avg_response = round(sum(response_times) / len(response_times), 3) if response_times else 0
