@@ -1,0 +1,14 @@
+AUDIT STEP 3 — SEND THIS TO REPLIT NOW
+"Engineer 2 Audit — Identity Ingestion (Wazuh/ITDR). Run the following and report each result separately:
+
+1. Ingest 50 mock identity events through modules/identity_eng.py. Use this exact composition: 15 SSH logins (10 normal business hours, 5 off-hours from new source IPs not seen in 30 days), 15 Windows Event ID sequences (10× 4625 failed login followed by 4624 success = brute force pattern, 5× normal 4624), 10 CloudTrail events (5 IAM key creation + 5 console logins from admin sessions), 5 impossible travel events (same user, two countries, <1hr gap), 5 Wazuh agent health events (3 normal check-ins, 1 agent silent at 95s, 1 agent flapping with 3 state changes in 60s). Report: total events processed, how many routed to ndr-identity, which IDENTITY rules fired.
+
+2. Confirm all 9 IDENTITY rules fired on appropriate inputs: IDENTITY-001 (off-hours privileged login), IDENTITY-002 (brute force success — 4625×n → 4624), IDENTITY-003 (lateral move from service account), IDENTITY-004 (impossible travel), IDENTITY-005 (credential stuffing pattern), IDENTITY-006 v2 (compound rule: all 3 conditions simultaneously — off-hours + new country + new IP + no prior login from country in 30 days, risk_score=88), IDENTITY-007 (Wazuh agent SILENT >90s — rule 100300, level 12), IDENTITY-008 (Wazuh agent FLAPPING — rule 100301, level 7). Report which rules fired and which did NOT fire (expected: some rules may not fire on this synthetic data — explain why each non-firing rule is correct).
+
+3. GeoIP 3-layer verification: confirm the MaxMind → ASN → reputation fallback chain is active. Inject one event with a known VPN/hosting ASN and confirm high_risk=true is set on that record. Report which layer resolved each test event.
+
+4. Patch completeness check — confirm all 6 Engineer 2 patches are active: Patch 1 (ECS 8.11.0 enforced — attempt to ingest one record with ecs.version=8.10.0 and confirm it is rejected or flagged), Patch 2 (IDENTITY-006 v2 compound firing with risk_score=88), Patch 3 (GeoIP SPOF 3-layer active), Patch 4 (CloudTrail EventBridge — doc only, confirm spec file present at specs/engineer2-patch4-cloudtrail-eventbridge.md), Patch 5 (IDENTITY-007 threshold is exactly 90s — not 300s, confirm the constant value in the code), Patch 6 (index naming — confirm all identity records write to ndr-identity only, no aliases or variants).
+
+5. Confirm IDENTITY-007 silent threshold constant in code reads 90 (not 300). Report the variable name and its value.
+
+Score as X/13. If 13/13, add comment # AUDIT PASSED – Blueprint v1.2 Sprint 3 to the top of modules/identity_eng.py."
