@@ -1,0 +1,30 @@
+Verbatim Instruction for Replit
+Send this now:
+
+"Implement Adaptive Temporal Windows in modules/detection_eng.py. Two-pass design — do NOT modify the base JOIN at line 316.
+
+Step 1 — Add window configuration table at the top of detection_eng.py:
+
+CopyADAPTIVE_WINDOWS = {
+    'C2_BEACON': 300,
+    'LATERAL_MOVE': 900,
+    'BRUTE_FORCE_SUCCESS': 120,
+    'SUSPICIOUS_IAM_KEY_ROTATION': 1800,
+    'HOST_CARDINALITY_SPIKE': 3600,
+    'DEFAULT': 300
+}
+Step 2 — Add _apply_adaptive_window(alert, delta_seconds) function that: (1) looks up the alert_type in ADAPTIVE_WINDOWS; (2) compares delta_seconds against the type-specific window; (3) returns correlation_confidence = 'HIGH' if within the adaptive window, 'MEDIUM' if within the base 300s window but outside the adaptive window, 'LOW' if somehow beyond 300s (log as anomaly).
+
+Step 3 — Call _apply_adaptive_window() in the pre-commit step after Sigma evaluation has set alert_type. Add two new fields to every correlated record before it is written to ndr-correlated:
+
+correlation_confidence: 'HIGH', 'MEDIUM', or 'LOW'
+correlation_window_used: integer seconds (the adaptive window value used)
+method: update from 'source_ip_join_5min' to 'source_ip_join_adaptive'
+Step 4 — Add a Tuning Registry entry in replit.md: 'Adaptive Temporal Windows implemented — two-pass design, per-alert-type windows, correlation_confidence field added.'
+
+After implementation run POST /run and confirm: (1) all 5 Sigma rules still firing, (2) correlated records contain correlation_confidence and correlation_window_used fields, (3) C2_BEACON records show correlation_window_used=300, (4) pipeline still under 60s. Report back."
+
+Why This Design Is Correct
+The two-pass approach solves the architectural constraint cleanly. The base JOIN at ±5 min acts as a funnel — it is intentionally permissive to avoid missing slow-burn attacks. The adaptive second pass then grades the quality of each correlation without discarding anything, giving the Engineer 4 kinetic layer a confidence signal to calibrate response intensity. A MEDIUM confidence IAM rotation alert can trigger a softer TIER 1 response while a HIGH confidence C2 beacon within a tight window triggers the full TIER 3.
+
+This also future-proofs the platform: adding volume-based window contraction in Sprint 3 only requires updating ADAPTIVE_WINDOWS values at runtime — the architecture already supports it.

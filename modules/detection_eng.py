@@ -5,9 +5,11 @@ Blueprint v1.2 | Phase Gate 0
 
 The brain of the platform. Performs 5 sequential operations:
   1. ECS Guardian Validation (reject non-compliant → DLQ)
-  2. Network-Identity JOIN (source.ip ±5 min window)
+  2. Network-Identity JOIN (source.ip ±5 min base window)
   3. Sigma Rule Evaluation (5 production rules)
   4. Pre-Commit Pattern (write to ndr-correlated BEFORE dispatch)
+     - Adaptive Temporal Windows: two-pass design grades correlation_confidence
+       (HIGH/MEDIUM/LOW) per alert_type using ADAPTIVE_WINDOWS config
   5. Build 11-field Engineer 4 Payload
 
 Spec sources:
@@ -41,6 +43,15 @@ from modules.network_eng import compute_community_id
 
 ECS_VERSION = "8.11.0"
 BLUEPRINT_VERSION = "v1.2"
+
+ADAPTIVE_WINDOWS = {
+    'C2_BEACON': 300,
+    'LATERAL_MOVE': 900,
+    'BRUTE_FORCE_SUCCESS': 120,
+    'SUSPICIOUS_IAM_KEY_ROTATION': 1800,
+    'HOST_CARDINALITY_SPIKE': 3600,
+    'DEFAULT': 300,
+}
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "ndr.db")
 
@@ -529,6 +540,9 @@ def _eval_lateral_move(correlated: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             ))
             if not cids:
                 cids = [compute_community_id(src_ip, 0, list(lateral_dests)[0], 0, 6)]
+            max_delta = max(
+                (r.get("correlation", {}).get("delta_seconds", 0) for r in recs), default=0
+            )
             alert = _build_correlated_alert(
                 source_ip=src_ip,
                 host_id=recs[0].get("host_id", f"i-{uuid.uuid4().hex[:17]}"),
@@ -540,6 +554,7 @@ def _eval_lateral_move(correlated: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                 correlation_id=corr_id,
                 extra={"unique_lateral_destinations": len(lateral_dests), "community_ids": cids},
             )
+            alert["correlation"]["delta_seconds"] = round(max_delta, 3)
             alerts.append(alert)
 
     return alerts
@@ -739,7 +754,8 @@ def _build_correlated_alert(
         "correlation": {
             "anchor_ip": source_ip,
             "time_window_minutes": 5,
-            "method": "source_ip_join_5min",
+            "method": "source_ip_join_adaptive",
+            "delta_seconds": 0,
             "pre_commit_written": False,
         },
         "network_summary": {
@@ -768,10 +784,30 @@ def _build_correlated_alert(
     return record
 
 
+def _apply_adaptive_window(alert: Dict[str, Any]) -> None:
+    alert_type = alert.get("alert_type", "DEFAULT")
+    adaptive_window = ADAPTIVE_WINDOWS.get(alert_type, ADAPTIVE_WINDOWS["DEFAULT"])
+    delta_seconds = alert.get("correlation", {}).get("delta_seconds", 0)
+
+    if delta_seconds <= adaptive_window:
+        confidence = "HIGH"
+    elif delta_seconds <= 300:
+        confidence = "MEDIUM"
+    else:
+        confidence = "LOW"
+        print(f"  [ANOMALY] {alert_type} correlation delta {delta_seconds}s exceeds base 300s window")
+
+    alert["correlation"]["correlation_confidence"] = confidence
+    alert["correlation"]["correlation_window_used"] = adaptive_window
+    alert["correlation"]["method"] = "source_ip_join_adaptive"
+
+
 def operation_4_pre_commit(alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     committed = []
 
     for alert in alerts:
+        _apply_adaptive_window(alert)
+
         alert["correlation"]["pre_commit_written"] = True
         alert["correlation"]["pre_commit_index"] = f"ndr-correlated-{datetime.now(timezone.utc).strftime('%Y.%m.%d')}"
         alert["correlation"]["pre_commit_doc_id"] = alert["eng3_correlation_id"]
