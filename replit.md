@@ -209,6 +209,60 @@ All 15/15 field checks PASS.
 
 ---
 
+## Battle-Hardened Declaration — Blueprint v1.2 | March 4, 2026
+
+**Status**: BATTLE-HARDENED — Global Test 6/6 STEPS PASSED
+
+### Global Test Final Record
+
+| Audit | Score | Immutable Mark | Date |
+|-------|-------|----------------|------|
+| Global Platform | 5/5 + Oracle 7/7 | Platform-level | 2026-03-03 |
+| Engineer 1 — Network | 12/12 | `# AUDIT PASSED` in network_eng.py | 2026-03-03 |
+| Engineer 2 — Identity | 13/13 | `# AUDIT PASSED` in identity_eng.py | 2026-03-03 |
+| Engineer 3 — Detection | 10/10 | `# AUDIT PASSED` in detection_eng.py | 2026-03-04 |
+| Engineer 4 — Kinetic | 10/10 | `# AUDIT PASSED` in kinetic_eng.py | 2026-03-04 |
+
+### Audit Fixes Found and Closed
+
+| Fix | Module | Type | Impact |
+|-----|--------|------|--------|
+| ECS Guardian validates event.category + event.dataset independently | detection_eng.py | Bug fix | Partial malformed records now caught |
+| _update_correlated_record fallback to id column | main.py | Reliability fix | API state + rollback endpoints resilient to ID variations |
+| KL-005 uses alert_timestamp not wall-clock | kinetic_eng.py | Architecture upgrade | Forensic replay enabled; off-hours logic is threat-time correct |
+| KL-006 tenant_id column at schema level | kinetic_eng.py | Foundation hardening | Multi-tenancy enforced at data layer, not just application layer |
+
+### Certified Platform Metrics
+
+| Metric | Value | Target | Headroom |
+|--------|-------|--------|----------|
+| Avg kinetic SLA | 603ms | <30,000ms | 98% under target |
+| Max kinetic SLA | 1,745ms | <30,000ms | 94% under target |
+| Oracle Phase Gate 0 | 7/7 PASS | 7/7 | Perfect |
+| Detection latency avg | 1.3s | <60s | 97.8% under target |
+| Detection latency max | 1.9s | <60s | 96.8% under target |
+| Sigma rules firing | 5/5 | 5/5 | Perfect |
+| Kinetic playbooks | 6/6 | 6/6 | Perfect |
+| DLQ contamination | 0 | 0 | Clean |
+| Immutable modules | 4/4 | 4/4 | Perfect |
+
+### Four Engineers — Final Status
+
+| Engineer | Module | Score | Status |
+|----------|--------|-------|--------|
+| Engineer 1 | modules/network_eng.py | 12/12 | RETIRED — IMMUTABLE |
+| Engineer 2 | modules/identity_eng.py | 13/13 | RETIRED — IMMUTABLE |
+| Engineer 3 | modules/detection_eng.py | 10/10 | RETIRED — IMMUTABLE (returns Sprint 4: Phase Gate 1 Oracle) |
+| Engineer 4 | modules/kinetic_eng.py | 10/10 | RETIRED — IMMUTABLE |
+
+### Tag Ready
+
+- **Tag**: `v1.2-battle-hardened`
+- **Repo**: info275/ndr-platform
+- **All preconditions met**: 4/4 modules audited, 0 regressions, 0 version drift, 0 DLQ contamination, 0 SLA violations
+
+---
+
 ## Tuning Registry
 | Date | Item | Status | Notes |
 |------|------|--------|-------|
