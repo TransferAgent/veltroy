@@ -90,12 +90,18 @@ def _update_correlated_record(eng3_correlation_id: str, updates: dict):
     conn = sqlite3.connect(DB_PATH)
     try:
         row = conn.execute(
-            'SELECT event_json FROM "ndr-correlated" WHERE eng3_correlation_id = ?',
+            'SELECT event_json, eng3_correlation_id FROM "ndr-correlated" WHERE eng3_correlation_id = ?',
             (eng3_correlation_id,)
         ).fetchone()
         if not row:
+            row = conn.execute(
+                'SELECT event_json, eng3_correlation_id FROM "ndr-correlated" WHERE id = ?',
+                (eng3_correlation_id,)
+            ).fetchone()
+        if not row:
             return None
         doc = json.loads(row[0])
+        actual_corr_id = row[1]
         for key, value in updates.items():
             if key in ("labels", "correlation"):
                 if key not in doc:
@@ -105,7 +111,7 @@ def _update_correlated_record(eng3_correlation_id: str, updates: dict):
                 doc[key] = value
         conn.execute(
             'UPDATE "ndr-correlated" SET event_json = ? WHERE eng3_correlation_id = ?',
-            (json.dumps(doc), eng3_correlation_id)
+            (json.dumps(doc), actual_corr_id)
         )
         conn.commit()
         return doc

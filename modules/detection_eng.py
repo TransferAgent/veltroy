@@ -1,3 +1,4 @@
+# AUDIT PASSED – Blueprint v1.2 Sprint 3
 #!/usr/bin/env python3
 """
 detection_eng.py — Engineer 3 Module (Data Architect / Brain Layer)
@@ -259,8 +260,10 @@ def operation_1_ecs_guardian(events: List[Dict[str, Any]], source_table: str) ->
             reasons.append("Missing required field: source.ip")
 
         ev = event.get("event", {})
-        if not ev.get("category") and not ev.get("dataset"):
-            reasons.append("Missing required field: event.category or event.dataset")
+        if not ev.get("category"):
+            reasons.append("Missing required field: event.category")
+        if not ev.get("dataset"):
+            reasons.append("Missing required field: event.dataset")
 
         ecs_ver = event.get("ecs", {}).get("version")
         if ecs_ver != ECS_VERSION:

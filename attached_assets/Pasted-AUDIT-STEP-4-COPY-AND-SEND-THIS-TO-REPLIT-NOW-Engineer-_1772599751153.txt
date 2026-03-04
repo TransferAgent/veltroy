@@ -1,0 +1,18 @@
+AUDIT STEP 4 — COPY AND SEND THIS TO REPLIT NOW
+"Engineer 3 Audit — Detection Brain (Sigma/DBT Correlation). Run the following and report each result separately:
+
+1. Run 20 correlations via POST /run across multiple pipeline cycles. After completing all 20 runs report: how many times each of the 5 Sigma rules fired (C2_BEACON, LATERAL_MOVE, BRUTE_FORCE_SUCCESS, SUSPICIOUS_IAM_KEY_ROTATION, HOST_CARDINALITY_SPIKE), total unique correlation IDs generated, and average pipeline time across the 20 runs.
+
+2. Adaptive Temporal Windows verification: sample 5 correlated records — one per Sigma rule type where possible. For each record confirm these 3 fields are present: correlation_confidence (expect HIGH for delta within adaptive window), correlation_window_used in seconds (expect C2_BEACON=300, LATERAL_MOVE=900, BRUTE_FORCE_SUCCESS=120, SUSPICIOUS_IAM_KEY_ROTATION=1800, HOST_CARDINALITY_SPIKE=3600), method=source_ip_join_adaptive. Report all field values found.
+
+3. ECS Guardian rejection test: inject 3 deliberately malformed events — (a) missing source.ip, (b) ecs.version=7.0.0 wrong version, (c) missing event.category. Confirm all 3 are rejected and routed to ndr-dlq with a dlq_reason label on each. Run GET /dlq/health and confirm dlq_status=WARNING with unexpected count = 3. Then remove the 3 injected records and confirm revert to NOMINAL.
+
+4. Confirm pre_commit_written=true on all current ndr-correlated records. Report count of records where true vs false.
+
+5. Confirm community_id is populated on records for all 5 Sigma rule types. Report one community_id value per rule type to confirm format consistency.
+
+6. DLQ Watcher live test: confirm GET /dlq/health returns NOMINAL on clean data. Inject 1 unexpected record — confirm WARNING. Remove — confirm NOMINAL revert.
+
+7. Confirm all 3 Engineer 3 Sprint 2 API endpoints respond correctly: POST /v1/state/kinetic with body {"eng3_correlation_id": "<any valid id>", "state": "IN_PROGRESS"} — expect 200 OK with updated document; GET /v1/audit/kinetic/<that same id> — expect 200 OK with correlation_confidence and correlation_window_used fields present; POST /v1/audit/kinetic/rollback with {"eng3_correlation_id": "<id>", "rollback_token": "AUDIT_TEST_TOKEN"} — expect 200 OK with execution_state=ROLLED_BACK.
+
+Score as X/10. If 10/10 add comment # AUDIT PASSED – Blueprint v1.2 Sprint 3 to the top of modules/detection_eng.py and report back."
