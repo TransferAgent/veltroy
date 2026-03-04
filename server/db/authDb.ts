@@ -112,3 +112,67 @@ export function updateTenantStatus(tenantId: string, status: string): void {
   const db = getDb();
   db.prepare('UPDATE "ndr-tenants" SET status = ? WHERE tenant_id = ?').run(status, tenantId);
 }
+
+export function getAllTenants(): Tenant[] {
+  const db = getDb();
+  return db.prepare('SELECT * FROM "ndr-tenants" ORDER BY created_at DESC').all() as Tenant[];
+}
+
+export function getUsersByTenantId(tenantId: string): User[] {
+  const db = getDb();
+  return db.prepare('SELECT * FROM "ndr-users" WHERE tenant_id = ? ORDER BY created_at DESC').all(tenantId) as User[];
+}
+
+export function getAllUsers(): User[] {
+  const db = getDb();
+  return db.prepare('SELECT * FROM "ndr-users" ORDER BY created_at DESC').all() as User[];
+}
+
+export function getUserById(id: number): User | undefined {
+  const db = getDb();
+  return db.prepare('SELECT * FROM "ndr-users" WHERE id = ?').get(id) as User | undefined;
+}
+
+export function updateUser(id: number, fields: { email?: string; role?: string; status?: string; is_parent?: number }): void {
+  const db = getDb();
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (fields.email !== undefined) { sets.push('email = ?'); vals.push(fields.email); }
+  if (fields.role !== undefined) { sets.push('role = ?'); vals.push(fields.role); }
+  if (fields.status !== undefined) { sets.push('status = ?'); vals.push(fields.status); }
+  if (fields.is_parent !== undefined) { sets.push('is_parent = ?'); vals.push(fields.is_parent); }
+  if (sets.length === 0) return;
+  vals.push(id);
+  db.prepare(`UPDATE "ndr-users" SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+}
+
+export function deleteUser(id: number): void {
+  const db = getDb();
+  db.prepare('DELETE FROM "ndr-users" WHERE id = ?').run(id);
+}
+
+export function updateTenant(tenantId: string, fields: { name?: string; tier?: string; status?: string; is_trial?: number; trial_expires_at?: string | null }): void {
+  const db = getDb();
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (fields.name !== undefined) { sets.push('name = ?'); vals.push(fields.name); }
+  if (fields.tier !== undefined) { sets.push('tier = ?'); vals.push(fields.tier); }
+  if (fields.status !== undefined) { sets.push('status = ?'); vals.push(fields.status); }
+  if (fields.is_trial !== undefined) { sets.push('is_trial = ?'); vals.push(fields.is_trial); }
+  if (fields.trial_expires_at !== undefined) { sets.push('trial_expires_at = ?'); vals.push(fields.trial_expires_at); }
+  if (sets.length === 0) return;
+  vals.push(tenantId);
+  db.prepare(`UPDATE "ndr-tenants" SET ${sets.join(', ')} WHERE tenant_id = ?`).run(...vals);
+}
+
+export function deleteTenant(tenantId: string): void {
+  const db = getDb();
+  db.prepare('DELETE FROM "ndr-users" WHERE tenant_id = ?').run(tenantId);
+  db.prepare('DELETE FROM "ndr-tenants" WHERE tenant_id = ?').run(tenantId);
+}
+
+export function countUsersByTenantId(tenantId: string): number {
+  const db = getDb();
+  const row = db.prepare('SELECT COUNT(*) as cnt FROM "ndr-users" WHERE tenant_id = ?').get(tenantId) as { cnt: number };
+  return row.cnt;
+}

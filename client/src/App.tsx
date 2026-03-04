@@ -23,7 +23,7 @@ import CorrelatedPage from "@/pages/correlated";
 import KineticPage from "@/pages/kinetic";
 import ProtectedView from "@/pages/protected";
 import LoginPage from "@/pages/login";
-import AdminPage from "@/pages/admin";
+import TenantsPage from "@/pages/tenants";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -74,7 +74,7 @@ function AuthRouter() {
       <Route path="/responses" component={Responses} />
       <Route path="/pipeline" component={Pipeline} />
       <Route path="/protected" component={ProtectedView} />
-      <Route path="/admin" component={AdminPage} />
+      <Route path="/tenants" component={TenantsPage} />
       <Route component={NotFound} />
     </Switch>
   );

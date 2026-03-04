@@ -69,7 +69,8 @@ app.use((req, res, next) => {
   }
 
   try {
-    const { seedDemoAccount } = await import("./seedDemo");
+    const { seedSuperUser, seedDemoAccount } = await import("./seedDemo");
+    await seedSuperUser();
     await seedDemoAccount();
   } catch (err) {
     log(`Demo seed warning: ${err instanceof Error ? err.message : err}`, "startup");

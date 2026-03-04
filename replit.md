@@ -316,25 +316,31 @@ Sprint 5:          OPEN — Login UI, Parent/Child admin, 2FA layer, then GitHub
 ## S5-01 COMPLETE — Login Card + Register + Seeded Data + Read-Only
 
 **Demo Admin Account (pre-seeded on startup):**
-- Email: `admin@ndr-demo.io`
-- Password: `NdrAdmin1!`
+- Email: `admin@ndr-demo.io` / Password: `NdrAdmin1!`
 - Role: owner (parent), Tenant: ndr-demo-admin, Trial: 30-day
-- Seeded with: 14 tickets, 8 correlated, 50 network, 20 identity, 12 kinetic records
 
-**Files created:**
-- `client/src/lib/auth.ts` — token storage, getCurrentUser, isAuthenticated, logout
-- `client/src/components/AuthBackground.tsx` — blurred dashboard tiles behind login card
-- `client/src/components/OrgDropdown.tsx` — org dropdown in header with "+ Organization" tooltip
-- `client/src/pages/login.tsx` — Sign In / Get Started toggle card, centered glass effect
-- `client/src/pages/admin.tsx` — stub for S5-02
-- `server/seedDemo.ts` — creates demo admin account on startup if not exists
+## S5-02 COMPLETE — Super User + Tenants Management + Parent/Child Accounts
 
-**Read-Only Enforcement:**
-- Trial users see "Read Only" badge (amber, Eye icon) in the header
-- `PATCH /api/threats/:id` → 403 for trial tokens
-- `POST /api/rollback` → 403 for trial tokens
-- `POST /api/ndr/run` → 402 for trial tokens (existing)
-- All GET endpoints (dashboard, events, identity, threats, etc.) remain accessible
+**Super User Account (pre-seeded on startup):**
+- Email: `super@ndr-platform.io` / Password: `SuperNdr1!`
+- Role: super_admin, Tenant: ndr-platform-core, NOT trial, enterprise tier
 
-**Auth flow:** Register/Login → JWT in localStorage → redirect to "/" (Dashboard) → full NDR platform with sidebar, live pipeline, seeded data
-**Env var:** SKIP_2FA=true (shared) — flip to false in S5-03 for OTP flow
+**Super Admin Tenants Page (route: /tenants):**
+- Sees ALL organizations in expandable cards with nested user tables
+- Toolbar per tenant: Edit org, Delete tenant, Extend Trial
+- User actions: Edit (email/role/status popup), Delete
+- Platform-core tenant protected from edit/delete
+- Input validation on all endpoints
+
+**Parent Owner Team Management (route: /tenants):**
+- Scoped to own tenant children only — zero cross-tenant leakage
+- Can add up to 5 children (roles: SOC Analyst/Billing Admin/Viewer)
+- Can edit/delete children via dialog popups
+- Add child dialog: email, role selector, optional temp password
+
+**Files:**
+- `server/routes/admin.ts` — admin API endpoints
+- `server/db/authDb.ts` — extended CRUD functions
+- `server/seedDemo.ts` — seedSuperUser() + seedDemoAccount()
+- `client/src/pages/tenants.tsx` — SuperAdminView + ParentOwnerView
+- `client/src/components/app-sidebar.tsx` — Management section with Tenants link

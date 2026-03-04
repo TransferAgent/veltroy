@@ -14,6 +14,41 @@ const DEMO_PASSWORD = "NdrAdmin1!";
 const DEMO_TENANT_ID = "ndr-demo-admin";
 const DEMO_ORG_NAME = "NDR Demo";
 
+const SUPER_EMAIL = "super@ndr-platform.io";
+const SUPER_PASSWORD = "SuperNdr1!";
+const SUPER_TENANT_ID = "ndr-platform-core";
+const SUPER_ORG_NAME = "NDR Platform";
+
+export async function seedSuperUser(): Promise<void> {
+  const existing = getUserByEmail(SUPER_EMAIL);
+  if (existing) {
+    log("Super user already exists — skipping seed", "startup");
+    return;
+  }
+
+  const existingTenant = getTenantById(SUPER_TENANT_ID);
+  if (!existingTenant) {
+    createTenant({
+      tenant_id: SUPER_TENANT_ID,
+      name: SUPER_ORG_NAME,
+      tier: "enterprise",
+      is_trial: 0,
+      trial_expires_at: "",
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(SUPER_PASSWORD, 12);
+  createUser({
+    tenant_id: SUPER_TENANT_ID,
+    email: SUPER_EMAIL,
+    password_hash: passwordHash,
+    role: "super_admin",
+    is_parent: 1,
+  });
+
+  log(`Super user created: ${SUPER_EMAIL} / ${SUPER_PASSWORD}`, "startup");
+}
+
 export async function seedDemoAccount(): Promise<void> {
   const existing = getUserByEmail(DEMO_EMAIL);
   if (existing) {

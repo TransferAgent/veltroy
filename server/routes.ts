@@ -5,6 +5,7 @@ import { updateThreatStatusSchema } from "@shared/schema";
 import { getInterfaceContractSchema } from "./engines/kinetic-eng";
 import ndrProxyRouter from "./routes/ndrProxy";
 import authRouter from "./routes/auth";
+import adminRouter from "./routes/admin";
 
 function isTrialToken(req: any): boolean {
   try {
@@ -27,6 +28,7 @@ export async function registerRoutes(
 
   app.use(ndrProxyRouter);
   app.use(authRouter);
+  app.use(adminRouter);
 
   app.get("/api/dashboard/stats", (_req, res) => {
     res.json(pipeline.getDashboardStats());

@@ -43,7 +43,10 @@ const navItems = [
   { title: "Response Actions", url: "/responses", icon: Zap },
   { title: "Pipeline Monitor", url: "/pipeline", icon: Activity },
   { title: "Protected View", url: "/protected", icon: ShieldCheck },
-  { title: "Admin", url: "/admin", icon: Users, parentOnly: true },
+] as const;
+
+const adminNavItems = [
+  { title: "Tenants", url: "/tenants", icon: Users },
 ] as const;
 
 export function AppSidebar() {
@@ -78,7 +81,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.filter((item) => !('parentOnly' in item && item.parentOnly) || currentUser?.is_parent).map((item) => (
+              {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -148,6 +151,37 @@ export function AppSidebar() {
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {(currentUser?.role === "super_admin" || currentUser?.is_parent) && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      data-active={location === item.url}
+                      className="data-[active=true]:bg-sidebar-accent"
+                    >
+                      <a
+                        href={item.url}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setLocation(item.url);
+                        }}
+                        data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-3">
