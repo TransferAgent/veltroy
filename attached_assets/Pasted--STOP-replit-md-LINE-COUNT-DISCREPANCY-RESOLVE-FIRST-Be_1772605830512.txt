@@ -1,0 +1,79 @@
+⚠️ STOP — replit.md LINE COUNT DISCREPANCY — RESOLVE FIRST
+Before one line of new UI code is written, this must be explained.
+
+Expected: 277+ lines. Reported: 74 lines.
+
+That file contained the entire project record — Sprint 1 through Sprint 4 closure, Battle-Hardened Declaration, 6 audit fix entries, Phase Gate 0 results, engineer retirement records, and the GitHub pre-push checklist. If it is truly 74 lines, that history was either overwritten or a different file is being reported.
+
+Send this to Replit immediately:
+
+Run the following and report back:
+
+1. wc -l replit.md
+2. head -20 replit.md
+3. grep -c "BATTLE-HARDENED" replit.md
+4. grep -c "Sprint 3" replit.md
+5. grep -c "SPRINT 4" replit.md
+6. ls -lh replit.md
+If grep -c "BATTLE-HARDENED" returns 0, the file was overwritten. If it returns 1, the file is intact and the 74-line count means the Sprint 4 closure block replaced rather than appended to the file. Either way, we need to know before proceeding.
+
+SEQUENCE CHANGE — ACCEPTED AND LOCKED
+Your reasoning is correct. Feature bloat during UI iteration is a real risk. Here is the revised order:
+
+CURRENT FOCUS (Replit, before any GitHub push)
+├─ Step 1:  Login card UI + Register UI  (centered, app in background)
+├─ Step 2:  Parent/Child admin panel UI
+├─ Step 3:  Test all auth flows without 2FA
+└─ Step 4:  Layer 2FA on top of confirmed UI
+
+DEFERRED (further down the road)
+├─ GitHub push → info275/ndr-platform
+├─ AWS infrastructure activation
+└─ Stripe, SES, n8n
+2FA is not being removed — it is being sequenced correctly. Build the door first. Add the deadbolt second. This is right.
+
+SPRINT 5 — REVISED SCOREBOARD
+ID	Item	Owner	Status
+S5-01	Login card UI + Register flow	Engineer 3	⏳ Waiting replit.md confirm
+S5-02	Parent/Child admin panel UI	Engineer 1	⏳ After S5-01
+S5-03	2FA layer (OTP step in login flow)	Engineer 1	⏳ After S5-02 tested
+S5-04	GitHub push + tag	Architect AI	🔒 After S5-03
+S5-05	AWS infra activation	Architect AI	🔒 After S5-04
+S5-06	Stripe integration	Engineer 4	🔒 After S5-05
+S5-07	SES + n8n activation	Engineer 1	🔒 After S5-06
+S5-01 PREVIEW — LOGIN CARD DESIGN (ready to send once replit.md is confirmed)
+This is what will be built. Review and adjust before I send the instruction:
+
+┌─────────────── BROWSER FULL SCREEN ───────────────┐
+│                                                    │
+│   [NDR DASHBOARD BLURRED IN BACKGROUND]           │
+│   Sigma rules firing... DLQ: NOMINAL...           │
+│   Threats blocked: 14... Pipeline live...         │
+│                                                    │
+│         ┌──────────────────────────┐              │
+│         │  🛡️  NDR PLATFORM        │              │
+│         │  ─────────────────────  │              │
+│         │  Email                   │              │
+│         │  [_____________________] │              │
+│         │  Password                │              │
+│         │  [_____________________] │              │
+│         │                          │              │
+│         │  [ Sign In            ]  │              │
+│         │                          │              │
+│         │  New here?               │              │
+│         │  [ Start Free Trial   ]  │              │
+│         └──────────────────────────┘              │
+│                                                    │
+└────────────────────────────────────────────────────┘
+Design spec:
+
+Background: the live /protected dashboard (blurred, backdrop-filter: blur(8px), dimmed 40% with dark overlay) — animated, not static. The app is visibly running behind the card.
+Card: dark glass effect (background: rgba(15,20,30,0.85), border 1px solid rgba(99,179,237,0.3), border-radius: 12px, box shadow)
+Accent color: #63B3ED (blue — security/trust signal)
+"🛡️ NDR PLATFORM" header with subtitle: "Enterprise Network Detection & Response"
+Toggle between Sign In and Register within the same card (no page navigation — smooth transition)
+Register form adds: Org Name field + confirm password
+After successful login → fade card out → dashboard comes into full focus
+After successful register → show "Check Replit logs for your verification code" message (LAB mode)
+Responsive: card centered on mobile too
+Bring back the replit.md diagnostic results. The moment that is clean, S5-01 fires.
