@@ -106,18 +106,8 @@ export default function ProtectedView() {
       setAuthUser(parsed);
       setLabTenant(parsed.tenant_id);
       setLabRole(parsed.role);
-      return;
     }
-
-    fetch("/api/ndr/token/lab")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.tokens) {
-          setLabToken(data.tokens[labRole]);
-        }
-      })
-      .catch(() => {});
-  }, [labRole]);
+  }, []);
 
   const authHeaders = labToken ? { Authorization: `Bearer ${labToken}` } : {};
 
@@ -245,20 +235,6 @@ export default function ProtectedView() {
         </div>
 
         <div className="flex items-center gap-2">
-          {!authUser && (
-            <select
-              value={labRole}
-              onChange={(e) => setLabRole(e.target.value)}
-              className="text-xs px-2 py-1 rounded border bg-background"
-              data-testid="select-lab-role"
-            >
-              <option value="owner">owner</option>
-              <option value="super_admin">super_admin</option>
-              <option value="billing_admin">billing_admin</option>
-              <option value="support">support</option>
-              <option value="customer">customer</option>
-            </select>
-          )}
           {canRunPipeline && (
             <Button
               size="sm"

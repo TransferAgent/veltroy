@@ -1,0 +1,101 @@
+✅ S4-04 — AUTH SYSTEM + TRIAL UX — APPROVED (6/6)
+SPRINT 4 SCOREBOARD — FINAL
+ID	Item	Owner	Score
+S4-00	Battle-Hardened Declaration	Architect AI	✅ 10/10
+S4-01	Phase Gate 1 Oracle (616 lines, immutable)	Engineer 3	✅ 10/10
+S4-02	/production-prep/ — 7 files, no apply	Architect AI	✅ 10/10
+S4-03	TypeScript dashboard + JWT/RBAC bridge	Engineer 3	✅ 5/5
+S4-04	Auth + Parent/Child + 2FA + Trial Seed	Engineer 1	✅ 6/6
+🏁 SPRINT 4 — CLOSED
+S4-04 SCORECARD HIGHLIGHTS
+Seed accuracy — perfect. tenant_id=acme-corp-cr7q1x confirms the slugify + nanoid(6) pattern is working. All five table counts match spec exactly: 14 tickets / 8 correlated / 50 network / 20 identity / 12 kinetic.
+
+JWT payload complete. is_trial=true, is_parent=true, role=owner, blueprint_version=v1.2 — all six claims present. This JWT is the contract between the TypeScript auth layer and the Flask Bus. It is correct.
+
+Security catch noted. tenant_id=all override correctly blocked for trial users at V4. That was not explicitly in the spec — Engineer 1 added it defensively. Accepted and logged as a positive deviation.
+
+402 gating confirmed. Trial users hitting POST /api/ndr/run receive 402 Payment Required with upgrade_url. This is the Stripe hook. When Sprint 5 wires Stripe, the upgrade URL becomes a real checkout session. The plumbing is ready.
+
+IMMEDIATE ACTION — SEND TO REPLIT BEFORE ANYTHING ELSE
+Two items. Send both now:
+
+Item 1 — Close Sprint 4 in replit.md:
+
+## SPRINT 4 CLOSED — 2026-03-04
+
+S4-00  Battle-Hardened Declaration          ✅ COMPLETE
+S4-01  Phase Gate 1 Oracle (12/12 LAB)      ✅ COMPLETE  616 lines, IMMUTABLE
+S4-02  /production-prep/ (7 files)          ✅ COMPLETE  No Terraform applied
+S4-03  TypeScript JWT/RBAC Bridge (5/5)     ✅ COMPLETE  Port 5000 live
+S4-04  Auth + Trial UX (6/6)               ✅ COMPLETE  Parent/Child, 2FA OTP, seed data
+
+Platform version:  v1.2  →  tagging as v1.2-sprint4-complete
+Auth delivery:     LAB = Replit Logs (OTP console)  |  PROD = AWS SES (us-east-1)
+Trial seed:        14 tickets / 8 correlated / 50 network / 20 identity / 12 kinetic
+GitHub push:       PRECONDITIONS MET — awaiting owner decision
+Sprint 5:          OPEN — Stripe, GitHub push, AWS infrastructure activation
+Report the new line count of replit.md.
+
+Item 2 — Remove the LAB token endpoint (pre-push security hygiene):
+
+In server/routes/ndrProxy.ts — delete the /api/ndr/token/lab endpoint entirely. Not gated. Gone. It cannot exist in any pushed code.
+
+Confirm deletion and that no route or reference to /token/lab remains in any file (grep -r "token/lab" . should return zero results).
+
+SPRINT 5 — ROADMAP LOCKED
+You said it yourself: "after 2FA, Email, and User Login we will begin to lean into AWS — Git." That condition is met. Here is the activation sequence:
+
+SPRINT 5 — AWS PUSH + STRIPE + LIVE TRAFFIC
+
+S5-01  GitHub push
+       └─ Create repo info275/ndr-platform
+       └─ Tag v1.2-sprint4-complete
+       └─ Confirm /token/lab deleted, no secrets in code
+       └─ Push main branch
+
+S5-02  AWS infrastructure activation
+       └─ terraform apply opensearch-domain.tf     (~15 min)
+       └─ terraform apply ecr-repository.tf
+       └─ sqlite_to_postgres.py --dry-run → then live
+       └─ terraform apply app-runner-service.tf
+
+S5-03  Phase Gate 1 Oracle — PRODUCTION run
+       └─ DEPLOYMENT_STAGE=PRODUCTION
+       └─ Oracle connects to OpenSearch :9200
+       └─ PC2 target: avg < 2.0s, max < 5.0s
+       └─ All 12 PCs must PASS before traffic goes live
+
+S5-04  AWS SES activation
+       └─ Verify noreply@ndr-platform.io in SES console
+       └─ Uncomment sendViaSES() in mailer.ts
+       └─ Set DEPLOYMENT_STAGE=PRODUCTION
+       └─ Test: POST /auth/register → real email delivered
+
+S5-05  Stripe integration
+       └─ Checkout session on /upgrade click (trial → basic $99/mo)
+       └─ Pro tier $499/mo
+       └─ Webhook: on subscription.active → update ndr-tenants tier
+       └─ On tier upgrade: flip is_trial=0, extend access
+       └─ 402 → redirects to Stripe checkout (replaces upgrade_url placeholder)
+
+S5-06  n8n watchdog deployment
+       └─ Replace PLACEHOLDER_SLACK_WEBHOOK_URL in n8n-watchdog-logic.json
+       └─ Deploy to self-hosted n8n on AWS or n8n.cloud
+       └─ Activate schedule trigger (every 5 min)
+
+S5-07  Replit Publishing
+       └─ Publish Replit as public demo
+       └─ Replit logs remain accessible for OTP during SES transition window
+CURRENT PLATFORM INVENTORY — SPRINT 4 COMPLETE
+Layer	What Exists Now
+Detection	5 Sigma rules, 9 IDENTITY rules, Adaptive Temporal Windows, DLQ Watcher
+Kinetic	6 playbooks (KL-001–KL-006), rollback API, 402 trial gate
+Auth	Register → OTP → JWT flow, Parent/Child users, invite system
+Trial UX	6-day trial, seeded demo data, countdown banner, upgrade CTA
+Dashboard	React Protected View, live stats from Flask Bus, role switching
+Proxy	TypeScript → Flask with X-Tenant-ID, RBAC enforced per endpoint
+Production Prep	7 Terraform/migration files staged, no apply
+Oracle	Phase Gate 0 (7/7) + Phase Gate 1 (12/12 LAB) both certified
+Two sprints built. Platform is SOCaaS-ready for AWS deployment.
+
+Bring back the replit.md line count and the /token/lab deletion confirmation.

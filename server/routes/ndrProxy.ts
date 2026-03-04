@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticateJWT, generateToken, isTrialExpired } from "../middleware/jwtAuth";
+import { authenticateJWT, isTrialExpired } from "../middleware/jwtAuth";
 import { requireRole, NDR_ROLES } from "../ndrRoles";
 import { proxyToFlask, checkTrialWriteBlock } from "../middleware/tenantProxy";
 
@@ -58,30 +58,5 @@ router.get(
     res.status(result.status).json(result.data);
   }
 );
-
-router.get("/api/ndr/token/lab", (_req, res) => {
-  const deploymentStage = process.env.DEPLOYMENT_STAGE || "LAB";
-  if (deploymentStage === "PRODUCTION") {
-    return res.status(403).json({ error: "LAB token endpoint disabled in PRODUCTION" });
-  }
-
-  const roles = ["owner", "super_admin", "billing_admin", "support", "customer"];
-  const tokens: Record<string, string> = {};
-
-  for (const role of roles) {
-    tokens[role] = generateToken({
-      user_id: `lab-${role}`,
-      role,
-      ndr_tenant_id: "default",
-      email: `${role}@ndr-lab.local`,
-    });
-  }
-
-  res.json({
-    message: "LAB tokens generated — do not use in production",
-    tokens,
-    blueprint_version: "v1.2",
-  });
-});
 
 export default router;

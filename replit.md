@@ -47,6 +47,20 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for data consistency.
 
+## SPRINT 4 CLOSED — 2026-03-04
+
+S4-00  Battle-Hardened Declaration          COMPLETE
+S4-01  Phase Gate 1 Oracle (12/12 LAB)      COMPLETE  616 lines, IMMUTABLE
+S4-02  /production-prep/ (7 files)          COMPLETE  No Terraform applied
+S4-03  TypeScript JWT/RBAC Bridge (5/5)     COMPLETE  Port 5000 live
+S4-04  Auth + Trial UX (6/6)               COMPLETE  Parent/Child, 2FA OTP, seed data
+
+Platform version:  v1.2  →  tagging as v1.2-sprint4-complete
+Auth delivery:     LAB = Replit Logs (OTP console)  |  PROD = AWS SES (us-east-1)
+Trial seed:        14 tickets / 8 correlated / 50 network / 20 identity / 12 kinetic
+GitHub push:       PRECONDITIONS MET — awaiting owner decision
+Sprint 5:          OPEN — Stripe, GitHub push, AWS infrastructure activation
+
 ## External Dependencies
 
 The platform integrates with and simulates data from the following external systems:
