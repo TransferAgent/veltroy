@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { execSync } from "child_process";
 import path from "path";
 import {
@@ -7,14 +8,17 @@ import {
   createUser,
   getUserByEmail,
   getTenantById,
-  createOtp,
-  getLatestUnusedOtp,
-  markOtpUsed,
+  createVerificationCode,
+  verifyCode,
+  canResendCode,
 } from "../db/authDb";
 import { generateToken, authenticateJWT } from "../middleware/jwtAuth";
-import { sendOTPEmail, sendWelcomeEmail, sendInviteEmail } from "../services/mailer";
+import { sendVerificationCode, maskEmail } from "../services/emailVerification";
+import { sendWelcomeEmail, sendInviteEmail } from "../services/mailer";
 
 const router = Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || "ndr-platform-jwt-secret-v1.2-lab";
 
 function slugify(text: string): string {
   return text
@@ -33,10 +37,6 @@ function nanoid(len: number): string {
   return result;
 }
 
-function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
 function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -47,6 +47,14 @@ function validatePassword(password: string): string | null {
   if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password))
     return "Password must contain at least 1 special character";
   return null;
+}
+
+function generatePendingToken(email: string): string {
+  return jwt.sign(
+    { pending: true, email },
+    JWT_SECRET,
+    { expiresIn: '15m' }
+  );
 }
 
 router.post("/auth/register", async (req: Request, res: Response) => {
@@ -132,18 +140,21 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       });
     }
 
-    const otp = generateOTP();
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    createOtp(email, otp, otpExpiresAt);
+    const newUser = getUserByEmail(email);
+    const code = await createVerificationCode(String(newUser?.id || 'new'), email);
+    await sendVerificationCode(email, code);
 
-    await sendOTPEmail(email, otp, true);
     await sendWelcomeEmail(email, tenantId, trialExpiresAt);
+
+    const pendingToken = generatePendingToken(email);
 
     return res.status(201).json({
       tenant_id: tenantId,
       email,
       trial_expires_at: trialExpiresAt,
-      message: "Check your email to verify your account.",
+      requiresMfa: true,
+      maskedEmail: maskEmail(email),
+      pendingToken,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Registration failed";
@@ -210,15 +221,15 @@ router.post("/auth/login", async (req: Request, res: Response) => {
       });
     }
 
-    const otp = generateOTP();
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    createOtp(email, otp, otpExpiresAt);
+    const code = await createVerificationCode(String(user.id), user.email);
+    await sendVerificationCode(user.email, code);
 
-    await sendOTPEmail(email, otp, false);
+    const pendingToken = generatePendingToken(user.email);
 
     return res.status(200).json({
-      message: "OTP sent to your email.",
-      email,
+      requiresMfa: true,
+      maskedEmail: maskEmail(user.email),
+      pendingToken,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Login failed";
@@ -227,29 +238,30 @@ router.post("/auth/login", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/auth/verify-otp", (req: Request, res: Response) => {
+router.post("/auth/verify-otp", async (req: Request, res: Response) => {
   try {
-    const { email, otp_code } = req.body || {};
+    const { pendingToken, otp_code } = req.body || {};
 
-    if (!email || !otp_code) {
-      return res.status(400).json({ error: "email and otp_code are required" });
+    if (!pendingToken || !otp_code) {
+      return res.status(400).json({ error: "pendingToken and otp_code are required" });
     }
 
-    const otpRecord = getLatestUnusedOtp(email);
-    if (!otpRecord) {
-      return res.status(401).json({ error: "No valid OTP found" });
+    let pendingPayload: any;
+    try {
+      pendingPayload = jwt.verify(pendingToken, JWT_SECRET);
+      if (!pendingPayload.pending) {
+        return res.status(401).json({ error: "Invalid session token" });
+      }
+    } catch {
+      return res.status(401).json({ error: "Session expired. Please log in again." });
     }
 
-    const expiry = new Date(otpRecord.expires_at).getTime();
-    if (expiry < Date.now()) {
-      return res.status(401).json({ error: "OTP has expired" });
-    }
+    const email = pendingPayload.email;
 
-    if (otpRecord.otp_code !== otp_code) {
-      return res.status(401).json({ error: "Invalid OTP code" });
+    const result = await verifyCode(email, otp_code);
+    if (!result.success) {
+      return res.status(401).json({ error: result.message });
     }
-
-    markOtpUsed(otpRecord.id);
 
     const user = getUserByEmail(email);
     if (!user) {
@@ -259,12 +271,12 @@ router.post("/auth/verify-otp", (req: Request, res: Response) => {
     const tenant = getTenantById(user.tenant_id);
 
     const token = generateToken({
-      user_id: String(user.id),
-      email: user.email,
-      role: user.role,
-      ndr_tenant_id: user.tenant_id,
-      is_parent: user.is_parent === 1,
-      is_trial: tenant?.is_trial === 1,
+      user_id:          String(user.id),
+      email:            user.email,
+      role:             user.role,
+      ndr_tenant_id:    user.tenant_id,
+      is_parent:        user.is_parent === 1,
+      is_trial:         tenant?.is_trial === 1,
       trial_expires_at: tenant?.trial_expires_at || undefined,
       blueprint_version: 'v1.2',
     });
@@ -283,6 +295,51 @@ router.post("/auth/verify-otp", (req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "OTP verification failed";
     console.error("[auth/verify-otp] Error:", message);
+    return res.status(500).json({ error: message });
+  }
+});
+
+router.post("/auth/resend-otp", async (req: Request, res: Response) => {
+  try {
+    const { pendingToken } = req.body || {};
+
+    if (!pendingToken) {
+      return res.status(400).json({ error: "Missing session token" });
+    }
+
+    let pendingPayload: any;
+    try {
+      pendingPayload = jwt.verify(pendingToken, JWT_SECRET);
+      if (!pendingPayload.pending) {
+        return res.status(401).json({ error: "Invalid session token" });
+      }
+    } catch {
+      return res.status(401).json({ error: "Session expired. Please log in again." });
+    }
+
+    const email = pendingPayload.email;
+    const user = getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!canResendCode(email)) {
+      return res.status(429).json({
+        error: "Please wait before requesting a new code.",
+        retry_after: 60,
+      });
+    }
+
+    const code = await createVerificationCode(String(user.id), email);
+    await sendVerificationCode(email, code);
+
+    return res.status(200).json({
+      message: "New code sent. Check Replit Logs.",
+      maskedEmail: maskEmail(email),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Resend failed";
+    console.error("[auth/resend-otp] Error:", message);
     return res.status(500).json({ error: message });
   }
 });

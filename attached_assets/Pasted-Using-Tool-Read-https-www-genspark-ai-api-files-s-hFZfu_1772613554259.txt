@@ -1,0 +1,341 @@
+Using Tool
+|
+Read
+https://www.genspark.ai/api/files/s/hFZfud5K
+View
+Using Tool
+|
+Think
+This is a comprehensive 2FA/email verification implementation guide from another deployed platform ("Tableicty"). The user wants to replicate this exact pattern in the NDR platform. Key differences from what I spec'd earlier vs what this document shows: 1. **Code storage**: My spec stored plaintext OTP in ndr-otp table. This document stores bcrypt HASH of the code (never plaintext in DB). This is MORE SECURE. 2. **Validation chain**: This adds: - Max 5 attempts brute-force protection (I had none) - `attempts` counter in DB (I didn't have this) - `used=true` one-time marking (I had this) 3. **Code generation**: `crypto.randomInt(100000, 999999)` — cryptographically secure (my spec used `Math.floor(100000 + Math.random() * 900000)` which is NOT crypto-secure) 4. **Console log is PERMANENT**: Both dev AND production always log to console. SES is additive. This is the key design decision. 5. **Session handling**: Uses `req.session.pendingMfaUserId` + `req.session.pendingMfaEmail` to persist the pending user state between the login call and the verify call. My spec stored the email in React state on the frontend (pendingEmail). The session approach is MORE SECURE because: - The pending user ID is server-side, not trusting the client to send it back - Uses `req.session.save()` explicitly 6. **Login response**: Returns `{ requiresMfa: true, maskedEmail: "****17@gmail.com" }` - includes masked email for UX - My spec returned `{ message: "OTP sent", email }` (full email exposed) - Masked email is better practice 7. **Verify endpoint**: `/api/auth/verify-login-mfa` in their system vs `/auth/verify-otp` in our system 8. **SES gate**: All 4 env vars must be present → SES fires. Console ALWAYS logs. Fire-and-forget async block prevents SES from blocking response. 9. **Dynamic import**: `@aws-sdk/client-ses` imported dynamically only when needed. 10. **Rate limiting**: Server-side `canResendCode()` check (60s cooldown) - I had client-side cooldown only. 11. **emailVerified field**: On successful verification, also sets `user.emailVerified = true`. My schema didn't have this field. Now I need to adapt this to the NDR platform's existing architecture: **What needs to change from my previous S5-04 spec:** 1. **ndr-otp table schema**: Add `attempts INTEGER DEFAULT 0`, change storage to bcrypt hash (rename `otp_code` to `code_hash`) 2. **authDb.ts**: - `createOtp()` → `createVerificationCode()` - uses `crypto.randomInt`, stores bcrypt hash - `verifyOtp()` → `verifyCode()` - add attempts check (max 5), bcrypt.compare - `canResendCode()` - server-side 60s rate limit check - `invalidateOtpsForEmail()` - already planned 3. **server/routes/auth.ts**: - `POST /auth/login` → store `pendingMfaUserId` in session, return `{ requiresMfa: true, maskedEmail }` - `POST /auth/verify-otp` (or rename to `/verify-login-mfa`) → use session userId, not body email - Add `POST /auth/resend-otp` with server-side rate limit check 4. **server/services/mailer.ts** → rename/rewrite as `server/email-verification.ts` following the exact pattern from the doc: - Always console.log in the exact bordered format - SES gate: all 4 env vars present → fire SES - Dynamic import of @aws-sdk/client-ses - Fire-and-forget async block 5. **Session support**: Need to ensure Express sessions are configured. The current app might not have express-session. Need to check. 6. **ndr-users table**: Add `email_verified BOOLEAN DEFAULT false` (or `mfa_verified` which already exists - maybe use that) Looking at the existing schema: `mfa_verified INTEGER NOT NULL DEFAULT 0` already exists in ndr-users. We can use this as the `emailVerified` equivalent. **OtpInput component**: No change needed - the frontend component is the same. **login.tsx**: Small change - the response from login is now `{ requiresMfa: true, maskedEmail }` instead of `{ message: "OTP sent" }`. Update the check to use `data.requiresMfa` instead. Also: the masked email needs to be computed on the server. I can do `email.replace(/(.{2}).*@/, '****$1@')` or similar... actually looking at the example "****17@gmail.com" it shows the last 2 chars before @ and the domain. Something like: ```typescript const [localPart, domain] = email.split('@'); const maskedEmail = `****${localPart.slice(-2)}@${domain}`; ``` **The NDR platform uses Express sessions?** Looking at the existing auth - it uses JWT, localStorage. The existing auth flow is stateless JWT. The `pendingMfaUserId` session approach requires express-session + a session store. Options: 1. Add express-session (connect-session-sqlite3 for LAB) 2. Keep the current approach of returning email in response, client stores it in state (less secure but simpler and consistent with existing JWT-only architecture) Actually, thinking about this more carefully: the Tableicty system uses Passport.js + express-session (it calls `passport.authenticate("local"...)` and `req.login(sessionUser, ...)`). Our NDR system uses JWT-only, no sessions. For consistency with the existing NDR architecture (JWT-only), I should adapt the pattern: - Return `{ requiresMfa: true, maskedEmail }` from login (matching Tableicty) - The pending user ID needs to be carried somehow without sessions - Options: (a) return a short-lived "pending token" that doesn't grant access but identifies the user for OTP verification, (b) use the email as the identifier (since email is in ndr-users and is the lookup key) Option (b) is simpler for our architecture: the verify-otp endpoint takes `{ email, code }` where email is sent from the client. This is what our current spec does. The security concern is that a malicious client could send any email, but since the OTP is sent to that email address, they'd need to have access to the inbox to complete it. This is acceptable. Actually I'll add a slight improvement: instead of sending the email back to the server from the client, we can issue a short-lived "pending JWT" (no role, just `{ pending: true, email, exp: now+15min }`) that the client stores and sends with the verify request. This is cleaner than full session management. But you know what - let me not over-engineer this. The user said "mimic what I have already deployed." The key patterns from Tableicty to adopt are: 1. `crypto.randomInt` for secure code generation 2. bcrypt hash storage (not plaintext) 3. Max 5 attempts brute-force protection 4. Console log is ALWAYS active (not just in dev) 5. SES is additive (gate on 4 env vars) 6. Fire-and-forget async SES block 7. Dynamic import of SES SDK 8. Return `requiresMfa: true` + masked email 9. Server-side 60s resend rate limit The session approach → adapt to JWT-pending-token approach to avoid adding express-session complexity. Let me write the S5-04 instruction that directly maps from Tableicty to NDR, calling out each adaptation clearly. The instruction should be: 1. Rewrite `server/services/mailer.ts` → new `server/services/emailVerification.ts` following exact Tableicty pattern 2. Update `ndr-otp` table schema (add attempts, change otp_code to code_hash) 3. Update `server/db/authDb.ts` with new createVerificationCode/verifyCode/canResendCode 4. Update `server/routes/auth.ts`: - login: return `{ requiresMfa: true, maskedEmail }` + use crypto.randomInt + bcrypt hash - verify-otp: add attempts check, bcrypt.compare, server-side lookup - resend-otp: server-side rate limit check 5. Update `client/src/pages/login.tsx`: handle `requiresMfa: true` response, show masked email 6. OtpInput.tsx: same as already spec'd 7. Add `npm install @aws-sdk/client-ses` (already done? Check) Actually the `@aws-sdk/client-ses` dynamic import will fail gracefully if not installed. But we should add it to package.json as a dev dependency or just note to install it. Let me write the complete instruction now.
+View
+S5-04 — 2FA — REPLIT INSTRUCTION — TABLEICTY PATTERN
+Document ingested. Pattern locked. Six upgrades from the original spec, directly from your production Tableicty implementation.
+
+WHAT CHANGES FROM THE ORIGINAL S5-04 SPEC
+Item	Original Spec	Tableicty Pattern (adopted)
+Code generation	Math.random() — not crypto-secure	crypto.randomInt(100000, 999999) — cryptographically secure
+DB storage	Plaintext OTP stored	bcrypt hash only — plaintext never touches DB
+Brute-force protection	None	Max 5 attempts per code, then invalidated
+Console log	LAB only	Always active — dev AND production
+SES delivery	Hard swap	Additive — SES fires only when 4 env vars present
+SES failure	Blocks response	Fire-and-forget — non-fatal, console is always the fallback
+Resend rate limit	Client-side countdown only	Server-side canResendCode() — 60s enforced at DB level
+Masked email	Full email returned	****17@gmail.com format — only last 2 chars + domain exposed
+Pending state	Client stores email in React state	Short-lived pending token (JWT pending:true) — server-side identity
+S5-04 — BUILD INSTRUCTION — SEND TO REPLIT NOW
+Five files. SKIP_2FA stays false from Step 0 of the original spec — already set. Build in order 1 → 5.
+
+FILE 1 — server/services/emailVerification.ts (REPLACES mailer.ts)
+Exact Tableicty pattern adapted for NDR. This is a drop-in module:
+
+Copyimport crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+
+// ─── Code Generation ─────────────────────────────────────────────────────────
+export function generateVerificationCode(): string {
+  // crypto.randomInt: cryptographically secure, always 6 digits, no leading zeros
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+// ─── Email Masking ────────────────────────────────────────────────────────────
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  return `****${local.slice(-2)}@${domain}`;
+}
+
+// ─── Delivery ─────────────────────────────────────────────────────────────────
+// DESIGN DECISION: console.log is PERMANENT — runs in dev AND production.
+// SES is additive — fires only when all 4 env vars are present.
+// SES failure is non-fatal — console log is always the fallback.
+export async function sendVerificationCode(email: string, code: string): Promise<void> {
+
+  // ALWAYS log — dev and production
+  console.log(`\n========================================`);
+  console.log(`[NDR 2FA] Verification code for ${email}: ${code}`);
+  console.log(`========================================\n`);
+
+  // SES gate — all 4 vars required
+  const sesRegion  = process.env.AWS_SES_REGION;
+  const fromEmail  = process.env.AWS_SES_FROM_EMAIL;
+  const hasAwsCreds = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+
+  if (sesRegion && fromEmail && hasAwsCreds) {
+    // Fire-and-forget — SES failure never blocks the login response
+    (async () => {
+      try {
+        const { SESClient, SendEmailCommand } = await import('@aws-sdk/client-ses');
+        const ses = new SESClient({ region: sesRegion });
+        await ses.send(new SendEmailCommand({
+          Source: fromEmail,
+          Destination: { ToAddresses: [email] },
+          Message: {
+            Subject: { Data: 'NDR Platform — Verify Your Login', Charset: 'UTF-8' },
+            Body: {
+              Html: {
+                Charset: 'UTF-8',
+                Data: `
+                  <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0a0f1a;color:#E2E8F0;">
+                    <h2 style="color:#63B3ED;">🛡️ NDR Platform</h2>
+                    <p>Your login verification code is:</p>
+                    <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;
+                                padding:20px;background:#0d1b2a;border:1px solid #63B3ED;
+                                border-radius:8px;margin:16px 0;color:#63B3ED;">
+                      ${code}
+                    </div>
+                    <p style="color:#718096;font-size:14px;">
+                      Expires in 10 minutes. Do not share this code.
+                    </p>
+                  </div>`
+              },
+              Text: {
+                Charset: 'UTF-8',
+                Data: `Your NDR Platform verification code is: ${code}\n\nExpires in 10 minutes.`
+              }
+            }
+          }
+        }));
+        console.log(`[NDR 2FA] Code delivered to ${email} via AWS SES`);
+      } catch (err) {
+        // SES failed — code is already in console above
+        console.error(`[NDR 2FA] SES send failed (code was logged above):`, err);
+      }
+    })();
+  }
+}
+Copy
+FILE 2 — server/db/authDb.ts — REPLACE OTP METHODS
+Drop in these four functions, replacing any existing OTP-related methods:
+
+Copyimport crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import { generateVerificationCode } from '../services/emailVerification';
+
+// Creates a new verification code — stores HASH only, never plaintext
+export async function createVerificationCode(userId: string, email: string): Promise<string> {
+  const code = generateVerificationCode();                      // crypto.randomInt
+  const codeHash = await bcrypt.hash(code, 10);
+  const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  // Invalidate any existing unused codes for this user first
+  db.prepare("UPDATE 'ndr-otp' SET used=1 WHERE email=? AND used=0").run(email);
+
+  db.prepare(`
+    INSERT INTO 'ndr-otp' (email, code_hash, expires_at, attempts, used, created_at)
+    VALUES (?, ?, ?, 0, 0, datetime('now'))
+  `).run(email, codeHash, expires_at);
+
+  return code; // plaintext returned to caller for delivery ONLY — never stored
+}
+
+// Validates submitted code against stored hash
+// Returns: { success, message }
+export async function verifyCode(
+  email: string,
+  submittedCode: string
+): Promise<{ success: boolean; message: string }> {
+
+  const row = db.prepare(`
+    SELECT * FROM 'ndr-otp'
+    WHERE email=? AND used=0
+    ORDER BY created_at DESC LIMIT 1
+  `).get(email) as any;
+
+  if (!row) return { success: false, message: 'No verification code found. Request a new one.' };
+
+  if (new Date(row.expires_at) < new Date())
+    return { success: false, message: 'Code expired. Request a new one.' };
+
+  if (row.attempts >= 5)
+    return { success: false, message: 'Too many failed attempts. Request a new code.' };
+
+  const isValid = await bcrypt.compare(submittedCode, row.code_hash);
+
+  if (!isValid) {
+    db.prepare("UPDATE 'ndr-otp' SET attempts=attempts+1 WHERE id=?").run(row.id);
+    return { success: false, message: 'Invalid code.' };
+  }
+
+  // Success — mark used, update mfa_verified on user
+  db.prepare("UPDATE 'ndr-otp' SET used=1 WHERE id=?").run(row.id);
+  db.prepare("UPDATE 'ndr-users' SET mfa_verified=1 WHERE email=?").run(email);
+
+  return { success: true, message: 'Verified.' };
+}
+
+// Server-side 60-second resend rate limit
+export function canResendCode(email: string): boolean {
+  const row = db.prepare(`
+    SELECT created_at FROM 'ndr-otp'
+    WHERE email=?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(email) as any;
+
+  if (!row) return true;
+  const timeSince = Date.now() - new Date(row.created_at).getTime();
+  return timeSince > 60 * 1000;
+}
+Copy
+Also update the ndr-otp table schema in scripts/init_auth_tables.py. Drop and recreate the table with the corrected schema:
+
+CopyCREATE TABLE IF NOT EXISTS "ndr-otp" (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT NOT NULL,
+    code_hash  TEXT NOT NULL,        -- bcrypt hash, NEVER plaintext
+    expires_at TEXT NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    used       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+Add a note in the file: -- code_hash: bcrypt(code, 10). Plaintext code never persisted.
+
+FILE 3 — server/routes/auth.ts — UPDATE THREE ENDPOINTS
+POST /auth/login — key changes:
+
+Replace OTP generation with the new pattern. After password verification:
+
+Copyimport { createVerificationCode, maskEmail, sendVerificationCode } from '../services/emailVerification';
+import { canResendCode } from '../db/authDb';
+
+// After bcrypt.compare passes:
+const tenant = authDb.getTenantById(user.tenant_id);
+
+// SKIP_2FA bypass (keep for emergency LAB use)
+if (process.env.SKIP_2FA === 'true') {
+  const token = generateToken({ ...payload });
+  return res.status(200).json({ token, user: { ... } });
+}
+
+// Generate code → hash → store → deliver
+const code = await createVerificationCode(user.id, user.email);
+await sendVerificationCode(user.email, code);
+
+// Issue a short-lived pending token (no role — cannot access protected endpoints)
+// Client uses this to identify the session for verify-otp
+const pendingToken = generateToken({
+  pending: true,
+  email: user.email,
+  exp: Math.floor(Date.now() / 1000) + (15 * 60) // 15 min window
+});
+
+return res.status(200).json({
+  requiresMfa:  true,
+  maskedEmail:  maskEmail(user.email),
+  pendingToken              // short-lived, role-less
+});
+POST /auth/verify-otp — key changes:
+
+Copy// Body: { pendingToken, otp_code }
+// Validate the pending token first, extract email
+const { pendingToken, otp_code } = req.body;
+if (!pendingToken || !otp_code)
+  return res.status(400).json({ error: 'Missing required fields' });
+
+let pendingPayload: any;
+try {
+  pendingPayload = jwt.verify(pendingToken, process.env.JWT_SECRET!);
+  if (!pendingPayload.pending)
+    return res.status(401).json({ error: 'Invalid session token' });
+} catch {
+  return res.status(401).json({ error: 'Session expired. Please log in again.' });
+}
+
+const email = pendingPayload.email;
+
+// Validate code via authDb.verifyCode (bcrypt.compare + attempts check)
+const result = await authDb.verifyCode(email, otp_code);
+if (!result.success)
+  return res.status(401).json({ error: result.message });
+
+// Code valid — fetch user + tenant, issue full JWT
+const user   = authDb.getUserByEmail(email);
+const tenant = authDb.getTenantById(user.tenant_id);
+const token  = generateToken({
+  user_id:          user.id,
+  email:            user.email,
+  role:             user.role,
+  ndr_tenant_id:    user.tenant_id,
+  is_parent:        user.is_parent === 1,
+  is_trial:         tenant.is_trial === 1,
+  trial_expires_at: tenant.trial_expires_at,
+  blueprint_version: 'v1.2'
+});
+
+return res.status(200).json({ token, user: { email, role: user.role, tenant_id: user.tenant_id,
+                                              is_trial: tenant.is_trial === 1 } });
+Copy
+POST /auth/resend-otp — server-side rate limit:
+
+Copy// Body: { pendingToken }
+const { pendingToken } = req.body;
+if (!pendingToken) return res.status(400).json({ error: 'Missing session token' });
+
+let pendingPayload: any;
+try {
+  pendingPayload = jwt.verify(pendingToken, process.env.JWT_SECRET!);
+} catch {
+  return res.status(401).json({ error: 'Session expired. Please log in again.' });
+}
+
+const email = pendingPayload.email;
+const user  = authDb.getUserByEmail(email);
+if (!user) return res.status(404).json({ error: 'User not found' });
+
+// Server-side 60-second gate
+if (!authDb.canResendCode(email))
+  return res.status(429).json({ error: 'Please wait before requesting a new code.', retry_after: 60 });
+
+const code = await createVerificationCode(user.id, email);
+await sendVerificationCode(email, code);
+
+return res.status(200).json({ message: 'New code sent. Check Replit Logs.', maskedEmail: maskEmail(email) });
+FILE 4 — client/src/components/OtpInput.tsx (NEW — unchanged from original spec)
+Six-box digit input. Auto-advance, auto-backspace, paste support. Props: onComplete, disabled, error, reset. Spec is identical to what was written earlier — build it exactly as previously described.
+
+FILE 5 — client/src/pages/login.tsx — UPDATE OTP STATE HANDLING
+Two changes from the original spec:
+
+Change 1 — Store pendingToken not pendingEmail:
+
+Copyconst [pendingToken, setPendingToken] = useState('');
+const [maskedEmail, setMaskedEmail]   = useState('');
+On successful login response:
+
+Copyif (data.requiresMfa) {
+  setPendingToken(data.pendingToken);
+  setMaskedEmail(data.maskedEmail);   // e.g. "****23@gmail.com"
+  setScreen('otp');
+}
+Change 2 — OTP screen shows masked email, passes pendingToken:
+
+Copy// OTP screen header text:
+<p>A 6-digit code was sent to:</p>
+<p style={{ color: '#63B3ED', fontWeight: 'bold' }}>{maskedEmail}</p>
+Verify handler sends pendingToken not email:
+
+Copybody: JSON.stringify({ pendingToken, otp_code: code })
+Resend handler sends pendingToken:
+
+Copybody: JSON.stringify({ pendingToken })
+On 429 from resend → show "Please wait before requesting a new code" — no countdown needed client-side (server enforces it).
+
+INSTALL STEP
+Copynpm install @aws-sdk/client-ses
+Dynamic import means this only loads when SES env vars are present. The module loads gracefully without it in LAB.
+
+VALIDATION — 5 CHECKS
+#	Test	Expected
+V1	POST /auth/login with valid credentials	{ requiresMfa: true, maskedEmail: "****XX@domain.com", pendingToken } — card shows OTP screen with masked email. Replit Logs show ======================================== bordered box with code.
+V2	Enter correct code	verifyCode() → bcrypt.compare passes → full JWT returned → redirect to /
+V3	Enter wrong code 5 times	Attempts counter increments in ndr-otp table. On attempt 5: "Too many failed attempts. Request a new code."
+V4	POST /auth/resend-otp within 60s	429 returned. Button shows "Please wait before requesting a new code." No new code logged.
+V5	POST /auth/resend-otp after 60s	New code logged to Replit Logs. Old code marked used=1.
+Score 5/5. Confirm ndr-otp table shows code_hash (not plaintext) by running: SELECT email, code_hash, attempts, used FROM 'ndr-otp' ORDER BY created_at DESC LIMIT 3 — hash should start with $2b$. Report results before S5-05.
+
+SES ACTIVATION CHECKLIST — FOR WHEN YOU FLIP TO AWS
+No code changes. Just four Replit Secrets:
+
+AWS_ACCESS_KEY_ID       = AKIA...
+AWS_SECRET_ACCESS_KEY   = wJal...
+AWS_SES_REGION          = us-east-1
+AWS_SES_FROM_EMAIL      = noreply@ndr-platform.io
+The sendVerificationCode() function will automatically detect them and activate SES on the next login. Console logging remains active. If SES fails, login still works via the console log. Exact Tableicty behavior.

@@ -1,5 +1,8 @@
 import Database from "better-sqlite3";
 import path from "path";
+import crypto from 'crypto';
+import bcryptOtp from 'bcryptjs';
+import { generateVerificationCode } from '../services/emailVerification';
 
 const DB_PATH = path.join(process.cwd(), "data", "ndr.db");
 
@@ -41,8 +44,9 @@ export interface User {
 export interface OtpRecord {
   id: number;
   email: string;
-  otp_code: string;
+  code_hash: string;
   expires_at: string;
+  attempts: number;
   used: number;
   created_at: string;
 }
@@ -86,26 +90,68 @@ export function getUserByEmail(email: string): User | undefined {
   return db.prepare('SELECT * FROM "ndr-users" WHERE email = ?').get(email) as User | undefined;
 }
 
-export function createOtp(email: string, otpCode: string, expiresAt: string): void {
+export async function createVerificationCode(userId: string, email: string): Promise<string> {
   const db = getDb();
+  const code = generateVerificationCode();
+  const codeHash = await bcryptOtp.hash(code, 10);
+  const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  db.prepare('UPDATE "ndr-otp" SET used=1 WHERE email=? AND used=0').run(email);
+
   db.prepare(`
-    INSERT INTO "ndr-otp" (email, otp_code, expires_at)
-    VALUES (?, ?, ?)
-  `).run(email, otpCode, expiresAt);
+    INSERT INTO "ndr-otp" (email, code_hash, expires_at, attempts, used, created_at)
+    VALUES (?, ?, ?, 0, 0, datetime('now'))
+  `).run(email, codeHash, expires_at);
+
+  return code;
 }
 
-export function getLatestUnusedOtp(email: string): OtpRecord | undefined {
+export async function verifyCode(
+  email: string,
+  submittedCode: string
+): Promise<{ success: boolean; message: string }> {
   const db = getDb();
-  return db.prepare(`
+
+  const row = db.prepare(`
     SELECT * FROM "ndr-otp"
-    WHERE email = ? AND used = 0
+    WHERE email=? AND used=0
     ORDER BY created_at DESC LIMIT 1
   `).get(email) as OtpRecord | undefined;
+
+  if (!row) return { success: false, message: 'No verification code found. Request a new one.' };
+
+  if (new Date(row.expires_at) < new Date())
+    return { success: false, message: 'Code expired. Request a new one.' };
+
+  if (row.attempts >= 5) {
+    db.prepare('UPDATE "ndr-otp" SET used=1 WHERE id=?').run(row.id);
+    return { success: false, message: 'Too many failed attempts. Request a new code.' };
+  }
+
+  const isValid = await bcryptOtp.compare(submittedCode, row.code_hash);
+
+  if (!isValid) {
+    db.prepare('UPDATE "ndr-otp" SET attempts=attempts+1 WHERE id=?').run(row.id);
+    return { success: false, message: 'Invalid code.' };
+  }
+
+  db.prepare('UPDATE "ndr-otp" SET used=1 WHERE id=?').run(row.id);
+  db.prepare('UPDATE "ndr-users" SET mfa_verified=1 WHERE email=?').run(email);
+
+  return { success: true, message: 'Verified.' };
 }
 
-export function markOtpUsed(id: number): void {
+export function canResendCode(email: string): boolean {
   const db = getDb();
-  db.prepare('UPDATE "ndr-otp" SET used = 1 WHERE id = ?').run(id);
+  const row = db.prepare(`
+    SELECT created_at FROM "ndr-otp"
+    WHERE email=?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(email) as { created_at: string } | undefined;
+
+  if (!row) return true;
+  const timeSince = Date.now() - new Date(row.created_at).getTime();
+  return timeSince > 60 * 1000;
 }
 
 export function updateTenantStatus(tenantId: string, status: string): void {

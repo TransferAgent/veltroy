@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { AuthBackground } from "@/components/AuthBackground";
+import { OtpInput } from "@/components/OtpInput";
 import { storeAuth } from "@/lib/auth";
 
+type Screen = "form" | "otp";
 type Mode = "signin" | "register";
 
 export default function LoginPage() {
+  const [screen, setScreen] = useState<Screen>("form");
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,6 +16,13 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
+
+  const [pendingToken, setPendingToken] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpReset, setOtpReset] = useState(0);
+  const [resendMessage, setResendMessage] = useState("");
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -53,13 +63,16 @@ export default function LoginPage() {
         setError(data.error || "Login failed");
         return;
       }
+      if (data.requiresMfa) {
+        setPendingToken(data.pendingToken);
+        setMaskedEmail(data.maskedEmail);
+        setScreen("otp");
+        return;
+      }
       if (data.token) {
         storeAuth(data.token, data.user);
         setFadeOut(true);
         setTimeout(() => { window.location.href = "/"; }, 300);
-      } else if (data.message?.includes("OTP")) {
-        console.log("2FA screen coming in S5-03");
-        setError("OTP verification required — coming in S5-03");
       }
     } catch {
       setError("Network error. Try again.");
@@ -93,17 +106,75 @@ export default function LoginPage() {
         setError(data.error || "Registration failed");
         return;
       }
+      if (data.requiresMfa) {
+        setPendingToken(data.pendingToken);
+        setMaskedEmail(data.maskedEmail);
+        setScreen("otp");
+        return;
+      }
       if (data.auto_login && data.token) {
         storeAuth(data.token, data.user);
         setFadeOut(true);
         setTimeout(() => { window.location.href = "/"; }, 300);
-      } else {
-        setError("Check Replit logs for your verification code");
       }
     } catch {
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleOtpComplete(code: string) {
+    setOtpError("");
+    setOtpLoading(true);
+    setResendMessage("");
+    try {
+      const res = await fetch("/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingToken, otp_code: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOtpError(data.error || "Verification failed");
+        setOtpReset((r) => r + 1);
+        return;
+      }
+      if (data.token) {
+        storeAuth(data.token, data.user);
+        setFadeOut(true);
+        setTimeout(() => { window.location.href = "/"; }, 300);
+      }
+    } catch {
+      setOtpError("Network error. Try again.");
+      setOtpReset((r) => r + 1);
+    } finally {
+      setOtpLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setResendMessage("");
+    setOtpError("");
+    try {
+      const res = await fetch("/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingToken }),
+      });
+      const data = await res.json();
+      if (res.status === 429) {
+        setOtpError(data.error || "Please wait before requesting a new code.");
+        return;
+      }
+      if (!res.ok) {
+        setOtpError(data.error || "Resend failed");
+        return;
+      }
+      setResendMessage("New code sent. Check Replit Logs.");
+      setOtpReset((r) => r + 1);
+    } catch {
+      setOtpError("Network error. Try again.");
     }
   }
 
@@ -155,6 +226,100 @@ export default function LoginPage() {
     cursor: 'pointer',
     transition: 'all 200ms ease',
   };
+
+  if (screen === "otp") {
+    return (
+      <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>
+        <AuthBackground />
+        <div style={cardStyle} data-testid="otp-screen">
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>
+              <span style={{ color: '#63B3ED' }}>&#x1f6e1;&#xfe0f;</span>
+            </div>
+            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, margin: '4px 0' }}
+                data-testid="text-otp-title">
+              Verify Your Identity
+            </h1>
+            <p style={{ color: '#A0AEC0', fontSize: 13, margin: '8px 0 0 0' }}>
+              A 6-digit code was sent to:
+            </p>
+            <p style={{ color: '#63B3ED', fontWeight: 'bold', fontSize: 14, margin: '4px 0 0 0' }}
+               data-testid="text-masked-email">
+              {maskedEmail}
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <OtpInput
+              onComplete={handleOtpComplete}
+              disabled={otpLoading}
+              error={otpError}
+              reset={otpReset}
+            />
+          </div>
+
+          {otpLoading && (
+            <p style={{ color: '#63B3ED', fontSize: '0.85rem', textAlign: 'center', margin: '0 0 12px 0' }}
+               data-testid="text-verifying">
+              Verifying...
+            </p>
+          )}
+
+          {resendMessage && (
+            <p style={{ color: '#48BB78', fontSize: '0.8rem', textAlign: 'center', margin: '0 0 12px 0' }}
+               data-testid="text-resend-success">
+              {resendMessage}
+            </p>
+          )}
+
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <p style={{ color: '#718096', fontSize: '0.8rem', margin: '0 0 8px 0' }}>
+              Didn't receive a code?
+            </p>
+            <button
+              onClick={handleResend}
+              style={{
+                background: 'none',
+                border: '1px solid rgba(99,179,237,0.3)',
+                borderRadius: 8,
+                color: '#63B3ED',
+                padding: '8px 20px',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 200ms',
+              }}
+              onMouseEnter={(e) => { (e.target as HTMLButtonElement).style.background = 'rgba(99,179,237,0.1)'; }}
+              onMouseLeave={(e) => { (e.target as HTMLButtonElement).style.background = 'none'; }}
+              data-testid="button-resend"
+            >
+              Resend Code
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
+            <span
+              style={{ color: '#718096', fontSize: '0.8rem', cursor: 'pointer' }}
+              onClick={() => {
+                setScreen('form');
+                setPendingToken('');
+                setMaskedEmail('');
+                setOtpError('');
+                setResendMessage('');
+              }}
+              data-testid="link-back-to-login"
+            >
+              ← Back to login
+            </span>
+          </div>
+
+          <p style={{ color: '#4A5568', fontSize: '0.7rem', textAlign: 'center', marginTop: '1rem' }}>
+            Code expires in 10 minutes. Check Replit Logs for delivery.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden' }}>

@@ -49,8 +49,9 @@ def init_tables(db_path: str = DB_PATH):
         CREATE TABLE IF NOT EXISTS "ndr-otp" (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             email       TEXT NOT NULL,
-            otp_code    TEXT NOT NULL,
+            code_hash   TEXT NOT NULL,   -- bcrypt(code, 10). Plaintext code never persisted.
             expires_at  TEXT NOT NULL,
+            attempts    INTEGER NOT NULL DEFAULT 0,
             used        INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL DEFAULT (datetime('now'))
         )

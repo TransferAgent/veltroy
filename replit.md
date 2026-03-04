@@ -37,7 +37,8 @@ The backend is an Express.js server in TypeScript orchestrating the NDR pipeline
 
 **Authentication and Authorization:**
 - Implements JWT validation and RBAC with five NDR roles (owner, super_admin, billing_admin, support, customer).
-- Features a tenant proxy for multi-tenancy, a full registration/login flow with bcrypt hashing, OTP email verification, and trial tenant provisioning.
+- Features a tenant proxy for multi-tenancy, a full registration/login flow with bcrypt hashing, and trial tenant provisioning.
+- **2FA/OTP (Tableicty Pattern)**: crypto.randomInt code generation, bcrypt-only hash storage (plaintext never persisted), 5-attempt brute-force protection, server-side 60s resend rate limit, pending JWT token (no role) for OTP session, masked email (****XX@domain.com), console log always active, SES fire-and-forget when AWS env vars present. SKIP_2FA env var for emergency bypass.
 - Includes parent/child user invite functionality and role-specific access controls.
 
 **Production Readiness:**
@@ -58,6 +59,7 @@ The platform integrates with and simulates data from the following external syst
 - **Wouter**: For client-side routing.
 - **Zod**: For robust schema validation.
 - **Nodemailer**: For email-based OTP verification (console logging in LAB mode).
+- **AWS SES Client (@aws-sdk/client-ses)**: For production email delivery (SES fire-and-forget, additive when env vars present).
 - **OpenSearch**: Target for production data storage and querying (simulated with SQLite in LAB mode).
 - **AWS SES**: Target for production email delivery.
 - **RDS PostgreSQL**: Target for production database.
