@@ -1,9 +1,9 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Shield, Activity, AlertTriangle, Ticket, Play, RefreshCw } from "lucide-react";
+import { Shield, Activity, AlertTriangle, Ticket, Play, RefreshCw, Clock, ArrowUpCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,10 +22,27 @@ interface DlqHealthData {
   [key: string]: unknown;
 }
 
+interface TicketRecord {
+  alert_type?: string;
+  severity?: string;
+  status?: string;
+  timestamp?: string;
+  event_json?: string;
+  [key: string]: unknown;
+}
+
 interface TicketsData {
-  tickets: Array<Record<string, unknown>>;
+  tickets: TicketRecord[];
   tenant_id: string;
   count: number;
+}
+
+interface AuthUser {
+  email: string;
+  role: string;
+  tenant_id: string;
+  is_trial: boolean;
+  trial_expires_at: string | null;
 }
 
 function getStatusColor(status: string | undefined): string {
@@ -44,13 +61,54 @@ function getStatusBadgeVariant(status: string | undefined): "default" | "seconda
   return "destructive";
 }
 
+function getTrialDaysRemaining(expiresAt: string | null | undefined): number {
+  if (!expiresAt) return 0;
+  const expiry = new Date(expiresAt).getTime();
+  const now = Date.now();
+  return Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)));
+}
+
+function getTrialBannerColor(daysRemaining: number): string {
+  if (daysRemaining <= 0) return "border-red-500 bg-red-500/10";
+  if (daysRemaining <= 2) return "border-amber-500 bg-amber-500/10";
+  return "border-blue-500 bg-blue-500/10";
+}
+
+function getLastAlertHoursAgo(tickets: TicketRecord[]): number {
+  if (!tickets || tickets.length === 0) return -1;
+  let mostRecent = 0;
+  for (const t of tickets) {
+    if (t.timestamp) {
+      const ts = new Date(t.timestamp).getTime();
+      if (ts > mostRecent) mostRecent = ts;
+    }
+  }
+  if (mostRecent === 0) return -1;
+  return Math.round((Date.now() - mostRecent) / (1000 * 60 * 60));
+}
+
 export default function ProtectedView() {
   const { toast } = useToast();
   const [labToken, setLabToken] = useState<string | null>(null);
   const [labRole, setLabRole] = useState<string>("owner");
   const [labTenant, setLabTenant] = useState<string>("default");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+
+  const isTrial = authUser?.is_trial ?? false;
+  const trialDays = getTrialDaysRemaining(authUser?.trial_expires_at);
 
   useEffect(() => {
+    const storedToken = sessionStorage.getItem("ndr_jwt");
+    const storedUser = sessionStorage.getItem("ndr_user");
+    if (storedToken && storedUser) {
+      setLabToken(storedToken);
+      const parsed = JSON.parse(storedUser) as AuthUser;
+      setAuthUser(parsed);
+      setLabTenant(parsed.tenant_id);
+      setLabRole(parsed.role);
+      return;
+    }
+
     fetch("/api/ndr/token/lab")
       .then((r) => r.json())
       .then((data) => {
@@ -64,7 +122,7 @@ export default function ProtectedView() {
   const authHeaders = labToken ? { Authorization: `Bearer ${labToken}` } : {};
 
   const { data: healthData, isLoading: healthLoading } = useQuery<HealthData>({
-    queryKey: ["/api/ndr/health"],
+    queryKey: ["/api/ndr/health", labToken],
     queryFn: async () => {
       const res = await fetch("/api/ndr/health", { headers: authHeaders });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -75,7 +133,7 @@ export default function ProtectedView() {
   });
 
   const { data: dlqData, isLoading: dlqLoading } = useQuery<DlqHealthData>({
-    queryKey: ["/api/ndr/dlq/health"],
+    queryKey: ["/api/ndr/dlq/health", labToken],
     queryFn: async () => {
       const res = await fetch("/api/ndr/dlq/health", { headers: authHeaders });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -86,9 +144,9 @@ export default function ProtectedView() {
   });
 
   const { data: ticketsData, isLoading: ticketsLoading } = useQuery<TicketsData>({
-    queryKey: ["/api/ndr/tickets"],
+    queryKey: ["/api/ndr/tickets", labToken],
     queryFn: async () => {
-      const res = await fetch("/api/ndr/tickets", { headers: authHeaders });
+      const res = await fetch(`/api/ndr/tickets?tenant_id=${encodeURIComponent(labTenant)}`, { headers: authHeaders });
       if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },
@@ -123,10 +181,52 @@ export default function ProtectedView() {
   const pipelineStatus = healthData?.status || "UNKNOWN";
   const dlqStatus = dlqData?.status || "UNKNOWN";
   const ticketCount = ticketsData?.count ?? 0;
-  const canRunPipeline = labRole === "owner" || labRole === "super_admin";
+  const canRunPipeline = (labRole === "owner" || labRole === "super_admin") && !isTrial;
+
+  const lateralMoveCount = useMemo(() => {
+    if (!ticketsData?.tickets) return 0;
+    return ticketsData.tickets.filter((t) => t.alert_type === "LATERAL_MOVE").length;
+  }, [ticketsData]);
+
+  const lastAlertHours = useMemo(() => {
+    return getLastAlertHoursAgo(ticketsData?.tickets || []);
+  }, [ticketsData]);
+
+  const noiseFilteredPct = 98;
 
   return (
     <div className="h-full overflow-auto p-6 space-y-6" data-testid="protected-view">
+      {isTrial && (
+        <div
+          className={`border rounded-lg p-4 ${getTrialBannerColor(trialDays)}`}
+          data-testid="banner-trial"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              <div>
+                <p className="font-semibold" data-testid="text-trial-days">
+                  TRIAL ACCOUNT — {trialDays} day{trialDays !== 1 ? "s" : ""} remaining
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  You're viewing demo data. Upgrade to connect live traffic.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" data-testid="button-upgrade-basic">
+                <ArrowUpCircle className="h-3 w-3 mr-1" />
+                Upgrade to Basic — $99/mo
+              </Button>
+              <Button size="sm" data-testid="button-upgrade-pro">
+                <ArrowUpCircle className="h-3 w-3 mr-1" />
+                Upgrade to Pro — $499/mo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
@@ -145,18 +245,20 @@ export default function ProtectedView() {
         </div>
 
         <div className="flex items-center gap-2">
-          <select
-            value={labRole}
-            onChange={(e) => setLabRole(e.target.value)}
-            className="text-xs px-2 py-1 rounded border bg-background"
-            data-testid="select-lab-role"
-          >
-            <option value="owner">owner</option>
-            <option value="super_admin">super_admin</option>
-            <option value="billing_admin">billing_admin</option>
-            <option value="support">support</option>
-            <option value="customer">customer</option>
-          </select>
+          {!authUser && (
+            <select
+              value={labRole}
+              onChange={(e) => setLabRole(e.target.value)}
+              className="text-xs px-2 py-1 rounded border bg-background"
+              data-testid="select-lab-role"
+            >
+              <option value="owner">owner</option>
+              <option value="super_admin">super_admin</option>
+              <option value="billing_admin">billing_admin</option>
+              <option value="support">support</option>
+              <option value="customer">customer</option>
+            </select>
+          )}
           {canRunPipeline && (
             <Button
               size="sm"
@@ -173,6 +275,70 @@ export default function ProtectedView() {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card data-testid="card-threats-blocked">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Threats Blocked (6d)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ticketsLoading ? (
+              <div className="animate-pulse h-8 bg-muted rounded" />
+            ) : (
+              <p className="text-3xl font-bold" data-testid="text-threats-blocked">{ticketCount}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-lateral-moves">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Lateral Moves Stopped
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ticketsLoading ? (
+              <div className="animate-pulse h-8 bg-muted rounded" />
+            ) : (
+              <p className="text-3xl font-bold" data-testid="text-lateral-moves">{lateralMoveCount}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-last-alert">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Last Alert
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ticketsLoading ? (
+              <div className="animate-pulse h-8 bg-muted rounded" />
+            ) : (
+              <p className="text-3xl font-bold" data-testid="text-last-alert">
+                {lastAlertHours >= 0 ? `${lastAlertHours}h ago` : "—"}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-noise-filtered">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              AI Noise Filtered
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold" data-testid="text-noise-filtered">{noiseFilteredPct}%</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -292,11 +458,11 @@ export default function ProtectedView() {
                   className="flex items-center justify-between text-xs p-2 rounded bg-muted/50"
                   data-testid={`row-ticket-${idx}`}
                 >
-                  <span className="font-mono">{(ticket.alert_type as string) || "unknown"}</span>
+                  <span className="font-mono">{ticket.alert_type || "unknown"}</span>
                   <Badge variant="secondary" className="text-[10px]">
-                    {(ticket.severity as string) || "—"}
+                    {ticket.severity || "—"}
                   </Badge>
-                  <span className="text-muted-foreground">{(ticket.status as string) || "OPEN"}</span>
+                  <span className="text-muted-foreground">{ticket.status || "OPEN"}</span>
                 </div>
               ))}
             </div>

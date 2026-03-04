@@ -1,0 +1,203 @@
+S4-04 — FULL BUILD INSTRUCTION — SEND TO REPLIT NOW
+This is a six-part build. Engineer 1 owns all six. Parts A–C are TypeScript (port 5000). Part D is Python (port 8000). Part E is schema. Part F is the trial UX. Build in order A → F.
+
+PART A — Database Schema (LAB SQLite + PROD PostgreSQL DDL)
+In data/ndr.db, add three new tables via a migration script scripts/init_auth_tables.py. Run it once on startup if tables do not exist:
+
+Copy-- Table 1: Tenants (extend existing ndr-tenants if present, or create fresh)
+CREATE TABLE IF NOT EXISTS "ndr-tenants" (
+    tenant_id         TEXT PRIMARY KEY,
+    name              TEXT NOT NULL,
+    tier              TEXT NOT NULL DEFAULT 'trial',   -- trial | basic | pro
+    status            TEXT NOT NULL DEFAULT 'active',
+    is_trial          INTEGER NOT NULL DEFAULT 1,       -- SQLite BOOLEAN
+    trial_expires_at  TEXT,                             -- ISO-8601
+    parent_tenant_id  TEXT REFERENCES "ndr-tenants"(tenant_id),
+    created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Table 2: Users
+CREATE TABLE IF NOT EXISTS "ndr-users" (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id     TEXT NOT NULL REFERENCES "ndr-tenants"(tenant_id),
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'customer',
+    is_parent     INTEGER NOT NULL DEFAULT 0,
+    mfa_secret    TEXT,
+    mfa_verified  INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'active',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Table 3: OTP Codes (ephemeral — entries expire after 10 min)
+CREATE TABLE IF NOT EXISTS "ndr-otp" (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT NOT NULL,
+    otp_code    TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    used        INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_otp_email ON "ndr-otp"(email);
+CREATE INDEX IF NOT EXISTS idx_users_email ON "ndr-users"(email);
+Copy
+Also add the PostgreSQL DDL equivalents of these three tables to production-prep/migration/rds-ndr-schema.sql — append them below the existing tables. Use BOOLEAN for integer flags and TIMESTAMPTZ for date fields.
+
+PART B — Seed Trial Data Script
+New file: scripts/seed_trial_data.py
+
+Copy#!/usr/bin/env python3
+# Seed 6 days of demo NDR data for a new trial tenant
+# Called automatically on POST /auth/register when is_trial=True
+# Usage: python scripts/seed_trial_data.py --tenant_id=<id> [--dry-run]
+Seed the following records into data/ndr.db, all scoped to tenant_id:
+
+Table	Count	Description
+ndr-tickets	14	Mix: 5 × BRUTE_FORCE_SUCCESS, 4 × C2_BEACON, 3 × LATERAL_MOVE, 2 × HOST_CARDINALITY_SPIKE. All status=OPEN, ticket_source=SOAR_AUTO, blueprint_version=v1.2. Timestamps spread across last 6 days (2–3 per day).
+ndr-correlated	8	3 × LATERAL_MOVE, 3 × C2_BEACON, 2 × BRUTE_FORCE. All with blueprint_version=v1.2, correlation_confidence=HIGH, pre_commit_written=True, tenant_id=<id>.
+ndr-network	50	Normal conn events (35) + beacon candidates (15). Spread across 6 days.
+ndr-identity	20	SSH logins (8) + off-hours anomalies (7) + CloudTrail (5). Include 2 with risk_score=88.
+ndr-kinetic	12	Execution records for KL-001 through KL-006 (2 each). All execution_state=COMPLETED, blueprint_version=v1.2.
+Summary stats the seed data must support (these are what the dashboard reads):
+
+threats_blocked_6_days = 14 (COUNT from ndr-tickets)
+lateral_moves_stopped = 3 (COUNT LATERAL_MOVE from ndr-correlated)
+last_alert_hours_ago = 2 (most recent ndr-tickets timestamp = NOW - 2h)
+ai_noise_filtered_pct = 98 (hardcoded label in seed, stored as labels.noise_filtered_pct=98)
+After seeding, print a confirmation table: table name, rows inserted, tenant_id confirmed. Support --dry-run flag (prints counts, writes nothing).
+
+PART C — TypeScript Auth Routes
+New file: server/routes/auth.ts
+
+Four endpoints. All endpoints write to data/ndr.db via a shared SQLite helper server/db/authDb.ts (new file, uses better-sqlite3 or existing DB connection):
+
+POST /auth/register
+
+Body: { email, password, org_name, tier? }
+
+Steps:
+
+Validate email format and password strength (min 8 chars, 1 number, 1 special char).
+Hash password with bcrypt (12 rounds).
+Generate tenant_id = slugify(org_name) + "-" + nanoid(6) (e.g., acme-corp-x7k2m1).
+Insert into ndr-tenants: tier="trial", is_trial=1, trial_expires_at = NOW + 6 days.
+Insert into ndr-users: role="owner", is_parent=1, mfa_verified=0.
+Call scripts/seed_trial_data.py --tenant_id=<id> via child_process.execSync. If seed fails, log error but do not fail registration.
+Send welcome + OTP email via server/services/mailer.ts (see Part D).
+Return 201 with { tenant_id, email, trial_expires_at, message: "Check your email to verify your account." }. Do not return JWT yet — require OTP verification first.
+POST /auth/login
+
+Body: { email, password }
+
+Steps:
+
+Look up user by email; return 401 if not found.
+bcrypt.compare(password, password_hash); return 401 if mismatch.
+Check user.status — if trial_expired, return 402 with { message: "Trial expired. Upgrade to continue.", upgrade_url: "/upgrade" }.
+Generate 6-digit OTP, store in ndr-otp with expires_at = NOW + 10 min.
+Send OTP email via mailer.
+Return 200 with { message: "OTP sent to your email.", email }. No JWT yet.
+POST /auth/verify-otp
+
+Body: { email, otp_code }
+
+Steps:
+
+Look up latest unused OTP for email; return 401 if not found or expired.
+Mark OTP as used=1.
+Fetch user + tenant record.
+Generate JWT (via generateToken() from jwtAuth.ts) with payload:
+Copy{
+  user_id:        user.id,
+  email:          user.email,
+  role:           user.role,
+  ndr_tenant_id:  user.tenant_id,
+  is_parent:      user.is_parent === 1,
+  is_trial:       tenant.is_trial === 1,
+  trial_expires_at: tenant.trial_expires_at,
+  blueprint_version: "v1.2"
+}
+Return 200 with { token, user: { email, role, tenant_id, is_trial, trial_expires_at } }.
+POST /auth/invite
+
+Body: { email, role } — requires JWT, is_parent=true
+
+Steps:
+
+Validate JWT; confirm req.user.is_parent === true. Return 403 if not.
+Validate role is one of: support, customer, billing_admin. Return 400 if owner/super_admin — parents cannot grant top-tier roles via invite.
+Generate a temporary password (nanoid(12)).
+Hash with bcrypt.
+Insert ndr-users with same tenant_id as parent, is_parent=0, mfa_verified=0.
+Send invite email via mailer: "You've been invited to [org_name]'s NDR dashboard. Temporary password: XXXX"
+Return 201 with { email, role, tenant_id, message: "Invite sent." }.
+PART D — Nodemailer Service
+New file: server/services/mailer.ts
+
+Copy// SMTP config from env vars
+// SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (Gmail App Password in LAB)
+// From: "NDR Platform <noreply@ndr-platform.io>" (placeholder in LAB)
+Three email functions:
+
+sendOTPEmail(email: string, otp: string, is_registration: boolean)
+
+Subject: "Your NDR Platform verification code"
+Body: plain text + HTML
+Your verification code is: [OTP_CODE]
+This code expires in 10 minutes.
+Do not share this code with anyone.
+sendWelcomeEmail(email: string, tenant_id: string, trial_expires_at: string)
+
+Subject: "Welcome to NDR Platform — Your network is now protected"
+Body includes:
+Trial end date
+Link to dashboard: https://[REPLIT_URL]/protected
+Summary: "14 threats have been pre-analyzed for your trial account"
+sendInviteEmail(email: string, org_name: string, temp_password: string, role: string)
+
+Subject: "You've been invited to [org_name]'s NDR security dashboard"
+Body includes role, temp password, login URL
+For LAB: if SMTP_USER is not set, log the email to console instead of sending. Do not throw. Add comment: // LAB_MODE: email logged to console — configure SMTP_USER/SMTP_PASS for live delivery.
+
+PART E — Update JWT and Proxy for Trial Users
+Modify server/middleware/jwtAuth.ts:
+
+Update generateToken() to accept and embed is_trial, is_parent, trial_expires_at in the payload.
+Add isTrial guard middleware: if req.user.is_trial && req.user.trial_expires_at < Date.now(), return 402 with upgrade message.
+Modify server/middleware/tenantProxy.ts:
+
+For POST calls (pipeline run, state changes): check req.user.is_trial. If true, return:
+Copy{ "error": "Trial accounts are read-only.", "upgrade_url": "/upgrade", "http_status": 402 }
+PART F — Update ProtectedView for Trial UX
+Modify client/src/pages/protected.tsx:
+
+Add a trial banner at the top when user.is_trial === true:
+
+┌──────────────────────────────────────────────────────────────┐
+│  ⏱  TRIAL ACCOUNT — X days remaining                         │
+│  You're viewing demo data. Upgrade to connect live traffic.  │
+│  [ Upgrade to Basic — $99/mo ]  [ Upgrade to Pro — $499/mo ] │
+└──────────────────────────────────────────────────────────────┘
+Update the stats panels to read real data from the seeded tenant:
+
+threats_blocked_6_days → GET /api/ndr/tickets?tenant_id=<id> → count
+lateral_moves_stopped → count tickets where alert_type=LATERAL_MOVE
+last_alert → most recent ticket created_at → display as "X hours ago"
+noise_filtered_pct → read from labels.noise_filtered_pct on most recent kinetic record
+Trial countdown: calculate days remaining from trial_expires_at in JWT. Show amber warning at ≤2 days, red at 0.
+
+VALIDATION STEPS — Report All 6
+POST /auth/register with { email: "test@acme.com", password: "Test@1234", org_name: "Acme Corp" } → expect 201, tenant_id generated, OTP email logged to console (LAB), seed script runs and reports 14 tickets / 8 correlated / 50 network / 20 identity / 12 kinetic for new tenant.
+
+POST /auth/login → expect 200, OTP logged to console. POST /auth/verify-otp → expect 200 with full JWT containing is_trial=true, is_parent=true, ndr_tenant_id, role=owner.
+
+POST /auth/invite with parent JWT, body { email: "analyst@acme.com", role: "support" } → expect 201, child user created with same tenant_id, invite email logged.
+
+GET /api/ndr/tickets with new tenant JWT → confirm count = 14 (seeded), all scoped to new tenant_id, zero cross-tenant leakage.
+
+POST /api/ndr/run with trial JWT → confirm 402 Payment Required with upgrade message.
+
+Open browser on port 5000 → /protected → confirm trial banner shows, stats render from seeded data (14 threats, 3 lateral moves, last alert ~2h ago), countdown displays correctly.
+
+Score 6/6. Report each with PASS/FAIL and measured values. Senior Architect review required before Sprint 4 is declared closed.

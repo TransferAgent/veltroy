@@ -38,6 +38,11 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 
 **Authentication and Authorization:**
 - **JWT/RBAC Bridge**: Implemented with JWT validation middleware, role-based access control (RBAC) using predefined NDR roles (owner, super_admin, billing_admin, support, customer), and a tenant proxy for routing requests with `X-Tenant-ID` headers.
+- **Auth System (S4-04)**: Full registration/login flow with bcrypt password hashing, 6-digit OTP email verification (Nodemailer, LAB console logging), trial tenant provisioning (6-day trial), and parent/child user invites. SQLite auth tables: `ndr-tenants`, `ndr-users`, `ndr-otp`. Init script runs on startup (`scripts/init_auth_tables.py`). Seed script (`scripts/seed_trial_data.py`) populates 14 tickets, 8 correlated, 50 network, 20 identity, 12 kinetic records per trial tenant.
+- **Trial UX**: Trial JWT includes `is_trial`, `is_parent`, `trial_expires_at`. Trial users blocked from POST /api/ndr/run (402). ProtectedView shows trial banner with countdown and upgrade CTAs when `is_trial=true`.
+- **Auth Routes**: POST /auth/register, POST /auth/login, POST /auth/verify-otp, POST /auth/invite (all on port 5000).
+- **DB Helper**: `server/db/authDb.ts` (better-sqlite3) for CRUD on auth tables.
+- **Mailer**: `server/services/mailer.ts` (Nodemailer). LAB_MODE logs to console when SMTP_USER not set.
 
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for data consistency.

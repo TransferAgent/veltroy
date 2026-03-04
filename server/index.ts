@@ -60,6 +60,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  try {
+    const { execSync } = await import("child_process");
+    execSync("python3 scripts/init_auth_tables.py", { encoding: "utf-8", timeout: 10000 });
+    log("Auth tables initialized", "startup");
+  } catch (err) {
+    log(`Auth table init warning: ${err instanceof Error ? err.message : err}`, "startup");
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

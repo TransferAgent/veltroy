@@ -6,6 +6,9 @@ export interface NdrUser {
   role: string;
   ndr_tenant_id: string;
   email: string;
+  is_parent?: boolean;
+  is_trial?: boolean;
+  trial_expires_at?: string;
 }
 
 declare global {
@@ -40,6 +43,9 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
       role: decoded.role as string,
       ndr_tenant_id,
       email: decoded.email as string,
+      is_parent: decoded.is_parent as boolean | undefined,
+      is_trial: decoded.is_trial as boolean | undefined,
+      trial_expires_at: decoded.trial_expires_at as string | undefined,
     };
 
     next();
@@ -50,8 +56,25 @@ export function authenticateJWT(req: Request, res: Response, next: NextFunction)
 
 export function generateToken(payload: Omit<NdrUser, "ndr_tenant_id"> & { ndr_tenant_id?: string }): string {
   return jwt.sign(
-    { ...payload, ndr_tenant_id: payload.ndr_tenant_id || "default" },
+    {
+      ...payload,
+      ndr_tenant_id: payload.ndr_tenant_id || "default",
+      blueprint_version: "v1.2",
+    },
     JWT_SECRET,
     { expiresIn: "8h" }
   );
+}
+
+export function isTrialExpired(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.is_trial && req.user?.trial_expires_at) {
+    const expiry = new Date(req.user.trial_expires_at).getTime();
+    if (expiry < Date.now()) {
+      return res.status(402).json({
+        error: "Trial expired. Upgrade to continue.",
+        upgrade_url: "/upgrade",
+      });
+    }
+  }
+  next();
 }

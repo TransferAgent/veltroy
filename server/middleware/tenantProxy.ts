@@ -1,7 +1,22 @@
 import axios, { type Method } from "axios";
+import type { Request } from "express";
 import { log } from "../index";
 
 const FLASK_BUS_URL = process.env.FLASK_BUS_URL || "http://localhost:8000";
+
+export function checkTrialWriteBlock(req: Request): { blocked: boolean; response?: { error: string; upgrade_url: string; http_status: number } } {
+  if (req.method === "POST" && req.user?.is_trial) {
+    return {
+      blocked: true,
+      response: {
+        error: "Trial accounts are read-only.",
+        upgrade_url: "/upgrade",
+        http_status: 402,
+      },
+    };
+  }
+  return { blocked: false };
+}
 
 export async function proxyToFlask(
   method: string,

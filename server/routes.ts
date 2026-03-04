@@ -4,6 +4,7 @@ import { pipeline } from "./pipeline";
 import { updateThreatStatusSchema } from "@shared/schema";
 import { getInterfaceContractSchema } from "./engines/kinetic-eng";
 import ndrProxyRouter from "./routes/ndrProxy";
+import authRouter from "./routes/auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -12,6 +13,7 @@ export async function registerRoutes(
   pipeline.start();
 
   app.use(ndrProxyRouter);
+  app.use(authRouter);
 
   app.get("/api/dashboard/stats", (_req, res) => {
     res.json(pipeline.getDashboardStats());
