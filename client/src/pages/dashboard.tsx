@@ -30,6 +30,8 @@ import type {
   NetworkEvent,
   Correlation,
 } from "@shared/schema";
+import { getCurrentUser } from "@/lib/auth";
+import GridOperatorView from "@/components/GridOperatorView";
 
 const severityColors: Record<string, string> = {
   "0-25": "hsl(142, 76%, 36%)",
@@ -436,6 +438,9 @@ function ActiveThreats({ threats }: { threats: Correlation[] }) {
 }
 
 export default function Dashboard() {
+  const user = getCurrentUser();
+  const isSuperAdmin = user?.role === "super_admin";
+
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
     refetchInterval: 3000,
@@ -458,6 +463,8 @@ export default function Dashboard() {
 
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
+      {isSuperAdmin && <GridOperatorView />}
+
       <div className="flex items-center justify-between gap-1">
         <div>
           <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">

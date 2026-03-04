@@ -228,9 +228,104 @@ def get_tickets():
     return jsonify({"tickets": tickets, "tenant_id": tenant_id, "count": len(tickets)})
 
 
+@app.route('/v1/grid/overview', methods=['GET'])
+def grid_overview():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    tenants = conn.execute(
+        "SELECT tenant_id, name, tier, is_trial, trial_expires_at, status FROM 'ndr-tenants'"
+    ).fetchall()
+
+    result = []
+    for t in tenants:
+        tid = t['tenant_id']
+
+        ticket_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM 'ndr-tickets' WHERE tenant_id=?", (tid,)
+        ).fetchone()['cnt']
+
+        last_ticket = conn.execute(
+            "SELECT alert_type, timestamp FROM 'ndr-tickets' WHERE tenant_id=? ORDER BY timestamp DESC LIMIT 1",
+            (tid,)
+        ).fetchone()
+
+        try:
+            last_kinetic = conn.execute(
+                "SELECT playbook_id, timestamp, state FROM 'ndr-kinetic' ORDER BY timestamp DESC LIMIT 1"
+            ).fetchone()
+        except Exception:
+            last_kinetic = None
+
+        if last_ticket:
+            from datetime import timedelta
+            last_ts = datetime.fromisoformat(last_ticket['timestamp'].replace('Z', '+00:00'))
+            hours_ago = (datetime.now(timezone.utc) - last_ts).total_seconds() / 3600
+            grid_status = 'PROTECTED' if hours_ago < 48 else 'MONITORING'
+        else:
+            grid_status = 'PENDING'
+
+        result.append({
+            'tenant_id':         tid,
+            'name':              t['name'],
+            'tier':              t['tier'],
+            'is_trial':          bool(t['is_trial']),
+            'status':            grid_status,
+            'ticket_count':      ticket_count,
+            'last_alert_type':   last_ticket['alert_type'] if last_ticket else None,
+            'last_alert_time':   last_ticket['timestamp'] if last_ticket else None,
+            'last_playbook':     last_kinetic['playbook_id'] if last_kinetic else None,
+            'last_kinetic_time': last_kinetic['timestamp'] if last_kinetic else None,
+        })
+
+    conn.close()
+    return jsonify({
+        'tenants':            result,
+        'total_tenants':      len(result),
+        'total_tickets':      sum(r['ticket_count'] for r in result),
+        'online_count':       sum(1 for r in result if r['status'] == 'PROTECTED'),
+        'blueprint_version':  'v1.2'
+    })
+
+
+@app.route('/v1/grid/feed', methods=['GET'])
+def grid_feed():
+    limit = min(int(request.args.get('limit', 20)), 50)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    rows = conn.execute("""
+        SELECT t.id, t.tenant_id, t.alert_type, t.severity, t.source_ip,
+               t.status, t.timestamp, t.ticket_json,
+               tn.name as tenant_name
+        FROM 'ndr-tickets' t
+        LEFT JOIN 'ndr-tenants' tn ON t.tenant_id = tn.tenant_id
+        ORDER BY t.timestamp DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+
+    feed = []
+    for r in rows:
+        entry = dict(r)
+        try:
+            tj = json.loads(entry.get('ticket_json', '{}') or '{}')
+            entry['kl_response_seconds'] = tj.get('kl_response_seconds_value')
+        except Exception:
+            entry['kl_response_seconds'] = None
+        del entry['ticket_json']
+        feed.append(entry)
+
+    conn.close()
+    return jsonify({
+        'feed':  feed,
+        'count': len(feed)
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 8000))
     print(f"[main.py] Flask Bus starting on port {port}")
     print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health | GET /dlq/health | GET /v1/tickets")
+    print(f"[main.py] Grid API: GET /v1/grid/overview | GET /v1/grid/feed")
     print(f"[main.py] Engineer 3 API: POST /v1/state/kinetic | GET /v1/audit/kinetic/<id> | POST /v1/audit/kinetic/rollback")
     app.run(host="0.0.0.0", port=port, debug=False)

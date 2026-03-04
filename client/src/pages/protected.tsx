@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Shield, Activity, AlertTriangle, Ticket, Play, RefreshCw, Clock, ArrowUpCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import TransformerOwnerView from "@/components/TransformerOwnerView";
 
 interface HealthData {
   status: string;
@@ -98,8 +99,8 @@ export default function ProtectedView() {
   const trialDays = getTrialDaysRemaining(authUser?.trial_expires_at);
 
   useEffect(() => {
-    const storedToken = sessionStorage.getItem("ndr_jwt");
-    const storedUser = sessionStorage.getItem("ndr_user");
+    const storedToken = sessionStorage.getItem("ndr_jwt") || localStorage.getItem("ndr_token");
+    const storedUser = sessionStorage.getItem("ndr_user") || localStorage.getItem("ndr_user");
     if (storedToken && storedUser) {
       setLabToken(storedToken);
       const parsed = JSON.parse(storedUser) as AuthUser;
@@ -184,8 +185,12 @@ export default function ProtectedView() {
 
   const noiseFilteredPct = 98;
 
+  const isNonSuperAdmin = authUser && authUser.role !== "super_admin";
+
   return (
     <div className="h-full overflow-auto p-6 space-y-6" data-testid="protected-view">
+      {isNonSuperAdmin && <TransformerOwnerView />}
+
       {isTrial && (
         <div
           className={`border rounded-lg p-4 ${getTrialBannerColor(trialDays)}`}

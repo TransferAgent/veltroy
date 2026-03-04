@@ -24,6 +24,7 @@ import KineticPage from "@/pages/kinetic";
 import ProtectedView from "@/pages/protected";
 import LoginPage from "@/pages/login";
 import TenantsPage from "@/pages/tenants";
+import UpgradePage from "@/pages/upgrade";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -75,6 +76,7 @@ function AuthRouter() {
       <Route path="/pipeline" component={Pipeline} />
       <Route path="/protected" component={ProtectedView} />
       <Route path="/tenants" component={TenantsPage} />
+      <Route path="/upgrade" component={UpgradePage} />
       <Route component={NotFound} />
     </Switch>
   );

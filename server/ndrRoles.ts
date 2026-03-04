@@ -10,7 +10,7 @@ export const NDR_ROLES = {
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   owner: ["read", "write", "admin", "rollback", "cross_tenant"],
-  super_admin: ["read", "write", "admin", "rollback"],
+  super_admin: ["read", "write", "admin", "rollback", "cross_tenant"],
   billing_admin: ["read", "billing"],
   support: ["read", "rollback"],
   customer: ["read"],

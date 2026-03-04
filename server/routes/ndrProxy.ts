@@ -50,12 +50,43 @@ router.get(
   async (req, res) => {
     let tenantParam = req.user!.ndr_tenant_id;
 
-    if (req.user!.role === NDR_ROLES.PLATFORM_OWNER && !req.user!.is_trial) {
+    if ((req.user!.role === NDR_ROLES.PLATFORM_OWNER || req.user!.role === NDR_ROLES.NDR_ADMIN) && !req.user!.is_trial) {
       tenantParam = (req.query.tenant_id as string) || "all";
     }
 
     const result = await proxyToFlask("GET", `/v1/tickets?tenant_id=${encodeURIComponent(tenantParam)}`, null, req.user!.ndr_tenant_id);
     res.status(result.status).json(result.data);
+  }
+);
+
+router.get(
+  "/api/ndr/grid/overview",
+  authenticateJWT,
+  isTrialExpired,
+  requireRole(NDR_ROLES.NDR_ADMIN),
+  async (req, res) => {
+    try {
+      const result = await proxyToFlask("GET", "/v1/grid/overview", null, req.user!.ndr_tenant_id);
+      res.status(result.status).json(result.data);
+    } catch (e: any) {
+      res.status(502).json({ error: "Grid overview unavailable", detail: e.message });
+    }
+  }
+);
+
+router.get(
+  "/api/ndr/grid/feed",
+  authenticateJWT,
+  isTrialExpired,
+  requireRole(NDR_ROLES.NDR_ADMIN),
+  async (req, res) => {
+    const limit = req.query.limit || 20;
+    try {
+      const result = await proxyToFlask("GET", `/v1/grid/feed?limit=${limit}`, null, req.user!.ndr_tenant_id);
+      res.status(result.status).json(result.data);
+    } catch (e: any) {
+      res.status(502).json({ error: "Grid feed unavailable", detail: e.message });
+    }
   }
 );
 
