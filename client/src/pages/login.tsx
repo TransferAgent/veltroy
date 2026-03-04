@@ -56,7 +56,7 @@ export default function LoginPage() {
       if (data.token) {
         storeAuth(data.token, data.user);
         setFadeOut(true);
-        setTimeout(() => { window.location.href = "/protected"; }, 300);
+        setTimeout(() => { window.location.href = "/"; }, 300);
       } else if (data.message?.includes("OTP")) {
         console.log("2FA screen coming in S5-03");
         setError("OTP verification required — coming in S5-03");
@@ -96,7 +96,7 @@ export default function LoginPage() {
       if (data.auto_login && data.token) {
         storeAuth(data.token, data.user);
         setFadeOut(true);
-        setTimeout(() => { window.location.href = "/protected"; }, 300);
+        setTimeout(() => { window.location.href = "/"; }, 300);
       } else {
         setError("Check Replit logs for your verification code");
       }

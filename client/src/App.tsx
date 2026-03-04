@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon } from "lucide-react";
 import { isAuthenticated } from "@/lib/auth";
+import { OrgDropdown } from "@/components/OrgDropdown";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Events from "@/pages/events";
@@ -79,7 +80,10 @@ function AppLayout() {
           <div className="flex flex-col flex-1 min-w-0">
             <header className="flex items-center justify-between gap-1 p-2 border-b shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <ThemeToggle />
+              <div className="flex items-center gap-1">
+                <OrgDropdown />
+                <ThemeToggle />
+              </div>
             </header>
             <main className="flex-1 overflow-hidden">
               <AuthRouter />
