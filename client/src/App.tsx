@@ -7,8 +7,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
-import { Sun, Moon } from "lucide-react";
-import { isAuthenticated } from "@/lib/auth";
+import { Sun, Moon, Eye } from "lucide-react";
+import { isAuthenticated, getCurrentUser } from "@/lib/auth";
 import { OrgDropdown } from "@/components/OrgDropdown";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -36,6 +36,20 @@ function ThemeToggle() {
     >
       {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>
+  );
+}
+
+function ReadOnlyBadge() {
+  const user = getCurrentUser();
+  if (!user?.is_trial) return null;
+  return (
+    <div
+      className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-medium"
+      data-testid="badge-read-only"
+    >
+      <Eye className="h-3 w-3" />
+      Read Only
+    </div>
   );
 }
 
@@ -81,6 +95,7 @@ function AppLayout() {
             <header className="flex items-center justify-between gap-1 p-2 border-b shrink-0">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <div className="flex items-center gap-1">
+                <ReadOnlyBadge />
                 <OrgDropdown />
                 <ThemeToggle />
               </div>

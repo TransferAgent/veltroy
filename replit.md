@@ -313,7 +313,13 @@ Trial seed:        14 tickets / 8 correlated / 50 network / 20 identity / 12 kin
 GitHub push:       PRECONDITIONS MET — awaiting owner decision
 Sprint 5:          OPEN — Login UI, Parent/Child admin, 2FA layer, then GitHub/AWS/Stripe
 
-## S5-01 COMPLETE — Login Card + Register + Seeded Data View
+## S5-01 COMPLETE — Login Card + Register + Seeded Data + Read-Only
+
+**Demo Admin Account (pre-seeded on startup):**
+- Email: `admin@ndr-demo.io`
+- Password: `NdrAdmin1!`
+- Role: owner (parent), Tenant: ndr-demo-admin, Trial: 30-day
+- Seeded with: 14 tickets, 8 correlated, 50 network, 20 identity, 12 kinetic records
 
 **Files created:**
 - `client/src/lib/auth.ts` — token storage, getCurrentUser, isAuthenticated, logout
@@ -321,13 +327,14 @@ Sprint 5:          OPEN — Login UI, Parent/Child admin, 2FA layer, then GitHub
 - `client/src/components/OrgDropdown.tsx` — org dropdown in header with "+ Organization" tooltip
 - `client/src/pages/login.tsx` — Sign In / Get Started toggle card, centered glass effect
 - `client/src/pages/admin.tsx` — stub for S5-02
+- `server/seedDemo.ts` — creates demo admin account on startup if not exists
 
-**Files modified:**
-- `server/routes/auth.ts` — SKIP_2FA bypass on login + register, JWT payload aligned
-- `client/src/App.tsx` — RequireAuth route guard, /login outside sidebar, OrgDropdown in header
-- `client/src/components/app-sidebar.tsx` — Admin nav item (is_parent only)
+**Read-Only Enforcement:**
+- Trial users see "Read Only" badge (amber, Eye icon) in the header
+- `PATCH /api/threats/:id` → 403 for trial tokens
+- `POST /api/rollback` → 403 for trial tokens
+- `POST /api/ndr/run` → 402 for trial tokens (existing)
+- All GET endpoints (dashboard, events, identity, threats, etc.) remain accessible
 
-**Auth flow:** Register/Login → JWT stored in localStorage → redirect to "/" (Dashboard) → full NDR platform with sidebar, live pipeline, seeded data visible
-**Org dropdown:** Header right side, shows current org name, role, "+ Organization" (stub), Sign Out
+**Auth flow:** Register/Login → JWT in localStorage → redirect to "/" (Dashboard) → full NDR platform with sidebar, live pipeline, seeded data
 **Env var:** SKIP_2FA=true (shared) — flip to false in S5-03 for OTP flow
-**Background PNG:** Awaiting user asset for login card "Peek Inside" background

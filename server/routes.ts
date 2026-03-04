@@ -6,6 +6,19 @@ import { getInterfaceContractSchema } from "./engines/kinetic-eng";
 import ndrProxyRouter from "./routes/ndrProxy";
 import authRouter from "./routes/auth";
 
+function isTrialToken(req: any): boolean {
+  try {
+    const authHeader = req.headers?.authorization;
+    if (!authHeader) return false;
+    const token = authHeader.replace("Bearer ", "");
+    const jwt = require("jsonwebtoken");
+    const payload = jwt.verify(token, process.env.JWT_SECRET || "ndr-platform-jwt-secret-v1.2-lab");
+    return !!payload.is_trial;
+  } catch {
+    return false;
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -35,6 +48,9 @@ export async function registerRoutes(
   });
 
   app.patch("/api/threats/:id", (req, res) => {
+    if (isTrialToken(req)) {
+      return res.status(403).json({ message: "Read-only: trial accounts cannot modify data" });
+    }
     const { id } = req.params;
     const parsed = updateThreatStatusSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -107,6 +123,9 @@ export async function registerRoutes(
   });
 
   app.post("/api/rollback", (req, res) => {
+    if (isTrialToken(req)) {
+      return res.status(403).json({ error: "Read-only: trial accounts cannot execute rollbacks" });
+    }
     const { original_execution_id, authorized_by, dry_run } = req.body;
     if (!original_execution_id || typeof original_execution_id !== "string") {
       return res.status(400).json({ error: "original_execution_id is required" });

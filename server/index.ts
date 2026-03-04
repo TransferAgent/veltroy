@@ -68,6 +68,13 @@ app.use((req, res, next) => {
     log(`Auth table init warning: ${err instanceof Error ? err.message : err}`, "startup");
   }
 
+  try {
+    const { seedDemoAccount } = await import("./seedDemo");
+    await seedDemoAccount();
+  } catch (err) {
+    log(`Demo seed warning: ${err instanceof Error ? err.message : err}`, "startup");
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
