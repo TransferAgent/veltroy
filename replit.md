@@ -62,8 +62,11 @@ The backend is an Express.js server in TypeScript, orchestrating the NDR pipelin
 **Conductor-Owned (Read-Only — No Engineer May Modify):**
 - `oracle/ndr_phase_gate_0_oracle_v2.py` — Phase Gate 0 Oracle Script (Blueprint v1.2). Checks 7 pass conditions (PC1–PC7): PC1 True Positive in ndr-correlated-*, PC2 Detection Latency <60s, PC3 KL-001 SLA <30s, PC4 Pre-Commit Pattern, PC5 Zero DLQ errors, PC6 community_id populated, PC7 Malformed doc → DLQ. Final arbiter of Phase Gate 0 pass/fail.
 
-**Phase Gate 1 Oracle Design** — COMPLETE Sprint 3:
-- `specs/phase-gate-1-oracle-design.md` — Architect AI–authored design specification for the Phase Gate 1 production certification Oracle. 12 pass conditions defined (PC1–PC12): OpenSearch connectivity, live data ingestion, all 5 Sigma rules on live traffic, kinetic playbooks against live AWS, SLA compliance under production load, SOAR tickets in RDS PostgreSQL, DLQ Watcher NOMINAL, DEGRADED heartbeat on real sensors, tenant isolation, adaptive temporal windows on live data, lab_adapter.py absent, audit trail HMAC integrity. Script build deferred to Sprint 4 (Engineer 3). Target: PRODUCTION stage on AWS.
+**Phase Gate 1 Oracle** — BUILT Sprint 4 (Engineer 3):
+- `oracle/ndr_phase_gate_1_oracle_v1.py` — Phase Gate 1 Oracle Script (Blueprint v1.2). 12 pass conditions (PC1–PC12). Dual-mode: DEPLOYMENT_STAGE=LAB (synthetic high-volume, SQLite via lab_adapter) or PRODUCTION (live OpenSearch + RDS PostgreSQL). LAB mode generates 600+ network + 400+ identity events, runs 5+ pipeline cycles, then evaluates all 12 PCs. PC1 Data Volume, PC2 Pipeline Performance, PC3 All 5 Sigma Rules, PC4 All 6 Kinetic Playbooks, PC5 SLA Hold (30 executions), PC6 SOAR Tickets with tenant_id, PC7 DLQ Watcher Clean, PC8 DEGRADED Heartbeat, PC9 Tenant Isolation (LAB stub), PC10 Adaptive Temporal Windows, PC11 lab_adapter Status, PC12 Audit Trail Integrity.
+- `specs/phase-gate-1-oracle-design.md` — Architect AI–authored design specification (Sprint 3). Authoritative spec for all 12 PCs.
+- **LAB RUN RESULT**: 12/12 PASS — Phase Gate 1 LAB CLEARED (2026-03-04). Not yet marked IMMUTABLE — pending Senior Architect review.
+- **Bug fix applied**: `oracle/lab_adapter.py` _patched_post recursion fixed — was re-importing patched `requests.post` instead of using saved `_real_requests_post`.
 
 **Shared Components:**
 - `shared/schema.ts`: Defines ECS 8.11.0 compliant Zod schemas for all data types, ensuring data consistency across modules.

@@ -220,8 +220,7 @@ def _patched_get(url: str, **kwargs):
 
 def _patched_post(url: str, **kwargs):
     if FLASK_BUS_URL in url:
-        import requests as real_req
-        return real_req.post(url, **kwargs)
+        return _real_requests_post(url, **kwargs)
     return _real_requests_post(url, **kwargs)
 
 

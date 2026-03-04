@@ -1,0 +1,42 @@
+S4-01 — SEND THIS TO REPLIT NOW
+"Engineer 3 Sprint 4 task: Build oracle/ndr_phase_gate_1_oracle_v1.py. Read specs/phase-gate-1-oracle-design.md first — it is the authoritative specification for all 12 pass conditions.
+
+This script must be built for PRODUCTION with a LAB mode flag. It is NOT a throwaway LAB script. One script, one environment variable controls behavior:
+
+DEPLOYMENT_STAGE = os.getenv("DEPLOYMENT_STAGE", "LAB")
+
+In LAB mode: use oracle/lab_adapter.py for data access + generate synthetic high-volume test data. In PRODUCTION mode: connect directly to OpenSearch port 9200 + RDS PostgreSQL. No lab_adapter.
+
+Build the script with the following structure:
+
+Header (immutable block): # Phase Gate 1 Oracle — ndr_phase_gate_1_oracle_v1.py # Blueprint v1.2 | Engineer 3 | Sprint 4 # IMMUTABLE after certification. Route all changes through Senior Architect. # DEPLOYMENT_STAGE=LAB: synthetic high-volume test mode # DEPLOYMENT_STAGE=PRODUCTION: live OpenSearch + RDS PostgreSQL
+
+LAB mode test data generation (run before PC evaluations): Generate and ingest via POST /run in batches: 600 network events (120 beacon candidates, 150 high-cardinality, 180 lateral candidates, 150 normal conn/dns/http), 400 identity events (80 off-hours logins, 100 brute force sequences, 80 CloudTrail, 80 impossible travel, 60 Wazuh health). Target: ≥1,000 total events processed before PC evaluation begins. Report ingestion count before starting PC checks.
+
+PC1 — Data Volume Check: Query all 5 tables. PASS if ndr-network ≥ 600, ndr-identity ≥ 400, ndr-correlated ≥ 50, ndr-dlq = 3 (PC7 records only), ndr-tickets ≥ 10. Report exact counts.
+
+PC2 — Pipeline Performance Under Load: Run POST /run 5 consecutive times with full 1000-event dataset loaded. PASS if all 5 runs complete in < 60s each and avg pipeline time < 5s. Report per-run times and average.
+
+PC3 — All 5 Sigma Rules Fire Under Load: After 5 pipeline runs confirm all 5 Sigma rules (C2_BEACON, LATERAL_MOVE, BRUTE_FORCE_SUCCESS, SUSPICIOUS_IAM_KEY_ROTATION, HOST_CARDINALITY_SPIKE) fired at least once. PASS if 5/5 confirmed. Report fire count per rule.
+
+PC4 — All 6 Kinetic Playbooks Execute: Confirm KL-001 through KL-006 each executed at least once during the 5 runs. Force KL-005 using alert_timestamp with hour=23. PASS if 6/6 confirmed. Report execution count per playbook and all SLAs < 30s.
+
+PC5 — SLA Hold Under Load (30 consecutive executions): Run POST /run until 30 total kinetic executions are collected. PASS if 30/30 SLAs met (all < 30s), no degradation trend vs Sprint 3 benchmark (avg 603ms). Report min/max/avg SLA across 30 executions.
+
+PC6 — SOAR Tickets in ndr-tickets with tenant_id: Query ndr-tickets. PASS if count ≥ 10, all records have tenant_id field populated (not null), all have ticket_source=SOAR_AUTO, all have status=OPEN. Report count and sample 3 ticket records.
+
+PC7 — DLQ Watcher Clean Under Load: Run GET /dlq/health after all pipeline runs. PASS if dlq_status=NOMINAL and dlq_unexpected_count=0. Report dlq_total count.
+
+PC8 — DEGRADED Heartbeat Fires Correctly: Simulate LATE_HEARTBEAT (sensor last-seen 75s ago) and LOW_PACKET_RATE (40% of rolling avg). PASS if both DEGRADED events land in ndr-network with correct degraded_reason and risk_score=55. Report both simulation results.
+
+PC9 — Tenant Isolation (LAB mode stub): Write 5 records to ndr-correlated with tenant_id="alpha" and 5 with tenant_id="beta". Query: SELECT * FROM ndr-correlated WHERE tenant_id="alpha". PASS if result contains exactly 5 records and zero beta records. Repeat for beta. Report isolation result. Add note: "Full OpenSearch index-level isolation tested at Phase Gate 1 PRODUCTION run."
+
+PC10 — Adaptive Temporal Windows Under Load: Sample 20 correlated records from the high-volume run. PASS if ≥ 90% contain all 3 fields: correlation_confidence, correlation_window_used, method=source_ip_join_adaptive. Report field presence percentage.
+
+PC11 — lab_adapter Status Check: In LAB mode: confirm oracle/lab_adapter.py is present and imported. PASS with note: "LAB mode confirmed — lab_adapter active. PRODUCTION run will verify absence." In PRODUCTION mode: confirm lab_adapter is NOT imported anywhere in active code. PASS only if grep returns zero results.
+
+PC12 — Audit Trail Integrity: Query ndr-kinetic for all records written during this Oracle run. PASS if 100% of records contain blueprint_version=v1.2, module=kinetic_eng, and a non-null playbook field. Report count checked and any failures.
+
+Scoring: 12/12 = Phase Gate 1 LAB CLEARED. 11/12 = Conditional (PC11 LAB note only). < 11 = FAIL — report to Senior Architect.
+
+After build: run the Oracle in LAB mode. Report all 12 PC results individually with PASS/FAIL and measured values. Do not mark the script immutable yet — Senior Architect reviews results first."
