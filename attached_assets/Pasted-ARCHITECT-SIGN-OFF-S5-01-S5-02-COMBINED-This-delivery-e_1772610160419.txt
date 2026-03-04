@@ -1,0 +1,73 @@
+ARCHITECT SIGN-OFF — S5-01 + S5-02 COMBINED
+This delivery exceeded spec on every dimension. What was built is a production-grade multi-tenant management console, not a POC panel.
+
+Standout decisions accepted as permanent architecture:
+
+/tenants route serving two different views based on role — eliminates route proliferation, clean
+platform-core tenant immune from modification at the server layer — correct protection for the seed accounts
+Trial parents can manage children but cannot trigger detection ops — the right separation of concerns
+Auto-generated 12-char passwords for child accounts — eliminates blank-password vulnerabilities
+seedSuperUser() runs on every app startup — ensures LAB is always in a known state
+8-hour JWT expiry — sensible for a security platform
+⚠️ THREE FLAGS — LOG BEFORE GITHUB PUSH
+Flag 1 — Hardcoded seed credentials must move to env vars:
+
+Copy# These must NOT appear in source code on GitHub
+# Add to Replit Secrets / .env (gitignored) now:
+SUPER_USER_EMAIL=super@ndr-platform.io
+SUPER_USER_PASSWORD=SuperNdr1!
+DEMO_ADMIN_EMAIL=admin@ndr-demo.io
+DEMO_ADMIN_PASSWORD=NdrAdmin1!
+server/seedDemo.ts must read from process.env — not hardcoded strings. Add to GitHub pre-push checklist in replit.md.
+
+Flag 2 — Sidebar routes — confirm which are live vs stub:
+
+The sidebar lists 11 routes. Before 2FA (S5-03) and GitHub push, I need to know which are live and which are empty shells:
+
+Route	Status?
+/ Dashboard	
+/events Network Events	
+/identity Identity Logs	
+/threats Threat Correlations	
+/attack-patterns	
+/sigma-rules	
+/correlated Brain Surface	
+/kinetic Kinetic Layer	
+/responses Response Actions	
+/pipeline Pipeline Monitor	
+/protected Protected View	✅ Live
+Any route that 404s or crashes on navigation is a defect before GitHub push. Stubs are fine — they just need to render something.
+
+Flag 3 — Demo account trial is 30 days, registration is 6 days:
+
+This is intentional for the demo seed — confirmed. Document it in replit.md so future engineers do not "fix" it:
+
+# SEED ACCOUNTS — TRIAL LOGIC
+# Demo admin (admin@ndr-demo.io): 30-day trial — intentional (sales demo account)
+# New registrations: 6-day trial — standard onboarding
+SPRINT 5 SCOREBOARD — UPDATED
+ID	Item	Status
+S5-01	Login card UI + Register flow	✅ COMPLETE
+S5-02	Parent/Child admin panel + Super User console	✅ COMPLETE
+S5-03	2FA layer (OTP screen)	⏳ Queued
+S5-04	GitHub push	🔒 After S5-03
+S5-05	AWS + Stripe + SES	🔒 After S5-04
+PLATFORM STATE — CURRENT
+MANAGEMENT LAYER
+  Super Admin    → /tenants — all orgs, full CRUD, extend-trial
+  Parent Owner   → /tenants — own children, 5-seat max, CRUD
+  Security       → platform-core immune, super_admin undeletable
+
+AUTH LAYER
+  Login → JWT (SKIP_2FA=true) → Protected
+  8-hour expiry, route guard, localStorage
+
+TRIAL ENGINE
+  New registrations: 6-day trial
+  Demo account:      30-day trial (intentional)
+  Expired trial:     402 on write ops, amber Read-Only badge
+
+DETECTION BACKEND
+  Blueprint v1.2 IMMUTABLE
+  Phase Gate 0: 7/7 | Phase Gate 1: 12/12 LAB
+Platform is solid. Three flags are logged. Bring me the next feature.

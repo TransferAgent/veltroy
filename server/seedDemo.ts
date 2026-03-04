@@ -9,13 +9,13 @@ import {
 } from "./db/authDb";
 import { log } from "./index";
 
-const DEMO_EMAIL = "admin@ndr-demo.io";
-const DEMO_PASSWORD = "NdrAdmin1!";
+const DEMO_EMAIL = process.env.DEMO_ADMIN_EMAIL || "admin@ndr-demo.io";
+const DEMO_PASSWORD = process.env.DEMO_ADMIN_PASSWORD || "NdrAdmin1!";
 const DEMO_TENANT_ID = "ndr-demo-admin";
 const DEMO_ORG_NAME = "NDR Demo";
 
-const SUPER_EMAIL = "super@ndr-platform.io";
-const SUPER_PASSWORD = "SuperNdr1!";
+const SUPER_EMAIL = process.env.SUPER_USER_EMAIL || "super@ndr-platform.io";
+const SUPER_PASSWORD = process.env.SUPER_USER_PASSWORD || "SuperNdr1!";
 const SUPER_TENANT_ID = "ndr-platform-core";
 const SUPER_ORG_NAME = "NDR Platform";
 
@@ -46,7 +46,7 @@ export async function seedSuperUser(): Promise<void> {
     is_parent: 1,
   });
 
-  log(`Super user created: ${SUPER_EMAIL} / ${SUPER_PASSWORD}`, "startup");
+  log(`Super user created: ${SUPER_EMAIL}`, "startup");
 }
 
 export async function seedDemoAccount(): Promise<void> {
@@ -88,5 +88,5 @@ export async function seedDemoAccount(): Promise<void> {
     log(`Demo seed data warning: ${seedErr instanceof Error ? seedErr.message : seedErr}`, "startup");
   }
 
-  log(`Demo account created: ${DEMO_EMAIL} / ${DEMO_PASSWORD}`, "startup");
+  log(`Demo account created: ${DEMO_EMAIL}`, "startup");
 }

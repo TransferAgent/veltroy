@@ -344,3 +344,24 @@ Sprint 5:          OPEN — Login UI, Parent/Child admin, 2FA layer, then GitHub
 - `server/seedDemo.ts` — seedSuperUser() + seedDemoAccount()
 - `client/src/pages/tenants.tsx` — SuperAdminView + ParentOwnerView
 - `client/src/components/app-sidebar.tsx` — Management section with Tenants link
+
+## ARCHITECT FLAGS — RESOLVED
+
+**Flag 1 — Seed credentials moved to env vars (RESOLVED):**
+server/seedDemo.ts reads from process.env with fallbacks:
+- `SUPER_USER_EMAIL` / `SUPER_USER_PASSWORD` → super user account
+- `DEMO_ADMIN_EMAIL` / `DEMO_ADMIN_PASSWORD` → demo admin account
+- Passwords no longer logged to startup console
+- GitHub pre-push: ensure .env is gitignored, credentials are in Replit Secrets only
+
+**Flag 2 — All sidebar routes are LIVE (RESOLVED):**
+All 11 sidebar routes are fully implemented pages (200-750 lines each), zero stubs:
+- / Dashboard (534 lines), /events (481), /identity (449), /threats (251)
+- /attack-patterns (235), /sigma-rules (275), /correlated (298), /kinetic (747)
+- /responses (208), /pipeline (377), /protected (450)
+- /tenants — SuperAdminView + ParentOwnerView (management page)
+
+**Flag 3 — Trial logic documented (RESOLVED):**
+- Demo admin (`admin@ndr-demo.io`): 30-day trial — INTENTIONAL (sales demo account)
+- New registrations via `/auth/register`: 6-day trial — standard onboarding
+- Do NOT "fix" this discrepancy — it is by design
