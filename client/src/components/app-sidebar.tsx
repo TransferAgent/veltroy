@@ -24,10 +24,12 @@ import {
   GitMerge,
   Crosshair,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import type { DashboardStats } from "@shared/schema";
+import { getCurrentUser } from "@/lib/auth";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -41,10 +43,12 @@ const navItems = [
   { title: "Response Actions", url: "/responses", icon: Zap },
   { title: "Pipeline Monitor", url: "/pipeline", icon: Activity },
   { title: "Protected View", url: "/protected", icon: ShieldCheck },
-];
+  { title: "Admin", url: "/admin", icon: Users, parentOnly: true },
+] as const;
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
+  const currentUser = getCurrentUser();
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -74,7 +78,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navItems.filter((item) => !('parentOnly' in item && item.parentOnly) || currentUser?.is_parent).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

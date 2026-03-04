@@ -102,6 +102,36 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       console.error(`[auth/register] Seed script error (non-fatal):`, seedErr);
     }
 
+    const SKIP_2FA = process.env.SKIP_2FA === 'true';
+
+    if (SKIP_2FA) {
+      const newUser = getUserByEmail(email);
+      const token = generateToken({
+        user_id:          String(newUser?.id || 'new'),
+        email,
+        role:             'owner',
+        ndr_tenant_id:    tenantId,
+        is_parent:        true,
+        is_trial:         true,
+        trial_expires_at: trialExpiresAt,
+        blueprint_version: 'v1.2',
+      });
+      return res.status(201).json({
+        tenant_id: tenantId,
+        email,
+        trial_expires_at: trialExpiresAt,
+        auto_login: true,
+        token,
+        user: {
+          email,
+          role: 'owner',
+          tenant_id: tenantId,
+          is_trial: true,
+          is_parent: true,
+        },
+      });
+    }
+
     const otp = generateOTP();
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     createOtp(email, otp, otpExpiresAt);
@@ -153,6 +183,31 @@ router.post("/auth/login", async (req: Request, res: Response) => {
 
     if (user.status !== "active") {
       return res.status(401).json({ error: "Account is not active" });
+    }
+
+    const SKIP_2FA = process.env.SKIP_2FA === 'true';
+
+    if (SKIP_2FA) {
+      const token = generateToken({
+        user_id:          String(user.id),
+        email:            user.email,
+        role:             user.role,
+        ndr_tenant_id:    user.tenant_id,
+        is_parent:        user.is_parent === 1,
+        is_trial:         tenant?.is_trial === 1,
+        trial_expires_at: tenant?.trial_expires_at || undefined,
+        blueprint_version: 'v1.2',
+      });
+      return res.status(200).json({
+        token,
+        user: {
+          email: user.email,
+          role: user.role,
+          tenant_id: user.tenant_id,
+          is_trial: tenant?.is_trial === 1,
+          is_parent: user.is_parent === 1,
+        },
+      });
     }
 
     const otp = generateOTP();
@@ -211,6 +266,7 @@ router.post("/auth/verify-otp", (req: Request, res: Response) => {
       is_parent: user.is_parent === 1,
       is_trial: tenant?.is_trial === 1,
       trial_expires_at: tenant?.trial_expires_at || undefined,
+      blueprint_version: 'v1.2',
     });
 
     return res.status(200).json({
@@ -220,6 +276,7 @@ router.post("/auth/verify-otp", (req: Request, res: Response) => {
         role: user.role,
         tenant_id: user.tenant_id,
         is_trial: tenant?.is_trial === 1,
+        is_parent: user.is_parent === 1,
         trial_expires_at: tenant?.trial_expires_at,
       },
     });

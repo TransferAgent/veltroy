@@ -1,0 +1,254 @@
+S5-01 — BUILD INSTRUCTION — SEND TO REPLIT NOW
+Two-part build. Part A is the login/register UI. Part B is a clean SKIP_2FA bypass so the UI is fully testable today without the OTP step blocking the flow. 2FA gets wired in S5-03 by flipping one env var.
+
+PART A — Backend: SKIP_2FA Bypass
+Modify server/routes/auth.ts — POST /auth/login:
+
+Add this logic at the top of the login handler, after password verification passes:
+
+Copy// S5-01 LAB BYPASS — remove before S5-03
+const SKIP_2FA = process.env.SKIP_2FA === 'true';
+
+if (SKIP_2FA) {
+  // Return JWT directly — no OTP step
+  const token = generateToken({
+    user_id:          user.id,
+    email:            user.email,
+    role:             user.role,
+    ndr_tenant_id:    user.tenant_id,
+    is_parent:        user.is_parent === 1,
+    is_trial:         tenant.is_trial === 1,
+    trial_expires_at: tenant.trial_expires_at,
+    blueprint_version: 'v1.2'
+  });
+  return res.status(200).json({
+    token,
+    user: { email: user.email, role: user.role, tenant_id: user.tenant_id,
+            is_trial: tenant.is_trial === 1, is_parent: user.is_parent === 1 }
+  });
+}
+// Normal path: generate OTP, send to mailer, return 200 { message: "OTP sent" }
+Set SKIP_2FA=true in Replit environment variables now. This is the testing switch. S5-03 sets it to false and adds the OTP screen.
+
+Also modify POST /auth/register — after password hash and tenant/user creation, if SKIP_2FA=true, skip the OTP email and return the JWT directly along with the 201 response. Add field auto_login: true to the response so the frontend knows to store the token immediately.
+
+PART B — Frontend: Login Card + Register + Route Guard
+Files to create or modify:
+
+client/src/
+├── pages/
+│   ├── login.tsx          ← NEW  (login + register toggle, centered card)
+│   └── admin.tsx          ← NEW  (stub — Parent/Child admin panel, built in S5-02)
+├── lib/
+│   └── auth.ts            ← NEW  (token storage, getCurrentUser, isAuthenticated)
+├── App.tsx                ← MODIFY (route guard + /login route)
+└── components/
+    └── AuthBackground.tsx ← NEW  (live blurred dashboard behind the card)
+File 1 — client/src/lib/auth.ts
+
+Token management — no external library:
+
+Copyconst TOKEN_KEY = 'ndr_token';
+const USER_KEY  = 'ndr_user';
+
+export function storeAuth(token: string, user: object): void {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function getCurrentUser(): any | null {
+  const u = localStorage.getItem(USER_KEY);
+  return u ? JSON.parse(u) : null;
+}
+
+export function isAuthenticated(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  try {
+    // Decode without verification (verification happens server-side on each request)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp > Date.now() / 1000;
+  } catch { return false; }
+}
+
+export function logout(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  window.location.href = '/login';
+}
+Copy
+File 2 — client/src/components/AuthBackground.tsx
+
+The live dashboard visible behind the login card:
+
+Copy// Renders a scaled-down, blurred, pointer-events-none version of the
+// Protected dashboard panels as a visual background.
+// Does NOT make any API calls — uses static placeholder tiles only.
+// Real data loads AFTER authentication.
+
+export function AuthBackground() {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'linear-gradient(135deg, #0a0f1a 0%, #0d1b2a 50%, #0a1628 100%)',
+      overflow: 'hidden', zIndex: 0
+    }}>
+      {/* Animated grid of blurred "dashboard tiles" */}
+      <div style={{ opacity: 0.15, filter: 'blur(3px)', transform: 'scale(1.05)',
+                    pointerEvents: 'none', padding: '2rem',
+                    display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+        {/* Tile 1 — Pipeline Status */}
+        <div style={tileStyle}>
+          <div style={tileDot('#48BB78')} /> Pipeline LIVE
+          <div style={tileMetric}>1.12s</div>
+        </div>
+        {/* Tile 2 — Threats Blocked */}
+        <div style={tileStyle}>
+          <div style={tileDot('#F6AD55')} /> Threats Blocked
+          <div style={tileMetric}>14</div>
+        </div>
+        {/* Tile 3 — DLQ */}
+        <div style={tileStyle}>
+          <div style={tileDot('#48BB78')} /> DLQ NOMINAL
+          <div style={tileMetric}>0 unexpected</div>
+        </div>
+        {/* Tile 4 — Sigma Rules */}
+        <div style={tileStyle}>
+          <div style={tileDot('#63B3ED')} /> Sigma Rules
+          <div style={tileMetric}>5 / 5 active</div>
+        </div>
+        {/* Tile 5 — Playbooks */}
+        <div style={tileStyle}>
+          <div style={tileDot('#63B3ED')} /> Playbooks
+          <div style={tileMetric}>KL-001–006</div>
+        </div>
+        {/* Tile 6 — Blueprint */}
+        <div style={tileStyle}>
+          <div style={tileDot('#9F7AEA')} /> Blueprint
+          <div style={tileMetric}>v1.2</div>
+        </div>
+      </div>
+      {/* Dark overlay so card reads clearly */}
+      <div style={{ position: 'absolute', inset: 0,
+                    background: 'rgba(5,10,20,0.65)', zIndex: 1 }} />
+    </div>
+  );
+}
+
+const tileStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(99,179,237,0.2)',
+  borderRadius: '8px', padding: '1rem', color: '#E2E8F0', fontSize: '0.85rem'
+};
+const tileDot = (color: string): React.CSSProperties => ({
+  display: 'inline-block', width: 8, height: 8,
+  borderRadius: '50%', background: color, marginRight: 6
+});
+const tileMetric: React.CSSProperties = {
+  fontSize: '1.4rem', fontWeight: 700, color: '#63B3ED', marginTop: '0.5rem'
+};
+Copy
+File 3 — client/src/pages/login.tsx
+
+Single file. Two modes toggled by a tab: Sign In and Get Started (register). No page navigation between them — smooth CSS transition within the same card.
+
+Card specification:
+
+Position: fixed, centered with top: 50%, left: 50%, transform: translate(-50%, -50%)
+Width: 420px, max-width: 92vw
+Background: rgba(13, 20, 35, 0.90)
+Border: 1px solid rgba(99, 179, 237, 0.25)
+Border radius: 16px
+Box shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,179,237,0.1)
+backdrop-filter: blur(20px)
+z-index: 10
+Card header (both modes):
+
+🛡️  NDR PLATFORM
+Enterprise Network Detection & Response
+Shield icon in #63B3ED. Title in white, 22px bold. Subtitle in #718096, 13px.
+
+Sign In tab — fields:
+
+Email (type=email, placeholder="your@company.com")
+Password (type=password, placeholder="Password")
+"Sign In" button — full width, background: #2B6CB0, hover #2C5282
+Error message area (red, below button) — shows on 401
+Below button: "No account? → Start your free 6-day trial" (click → switch to Get Started tab)
+Sign In flow:
+
+POST /auth/login with { email, password }
+If SKIP_2FA=true → response contains token → call storeAuth(token, user) → window.location.href = '/protected'
+If response is { message: "OTP sent..." } (2FA mode, S5-03) → show OTP input screen (stub div, not built yet — just log "2FA screen coming in S5-03")
+On 401 → show "Invalid email or password"
+On 402 → show "Your trial has expired. Contact us to upgrade."
+Get Started tab — fields:
+
+Organization Name (placeholder="Acme Security Inc.")
+Email (type=email)
+Password (type=password, min 8 chars)
+Confirm Password
+"Create Account & Start Trial" button — background: #276749 (green)
+Fine print below button: "6-day free trial · No credit card required"
+Below: "Already have an account? → Sign In"
+Register flow:
+
+Client-side validate: passwords match, password complexity (1 number, 1 special char)
+POST /auth/register with { email, password, org_name }
+If auto_login: true in response → call storeAuth(token, user) → redirect to /protected
+If no auto_login (future 2FA mode) → show "Check Replit logs for your verification code"
+On 409 (email exists) → "An account with this email already exists"
+On 400 → show validation error from server
+After successful login/register: The card fades out with opacity: 0, transform: scale(0.95) transition over 300ms, then redirect fires.
+
+File 4 — Modify client/src/App.tsx
+
+Add route guard and /login route:
+
+Copyimport { isAuthenticated } from './lib/auth';
+
+// Route guard component
+function RequireAuth({ children }: { children: JSX.Element }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
+
+// Add to router:
+<Route path="/login" element={<LoginPage />} />
+<Route path="/protected" element={
+  <RequireAuth><ProtectedView /></RequireAuth>
+} />
+<Route path="/admin" element={
+  <RequireAuth><AdminPage /></RequireAuth>  // stub for S5-02
+} />
+// Root redirect: if authenticated → /protected, else → /login
+<Route path="/" element={
+  isAuthenticated() ? <Navigate to="/protected" /> : <Navigate to="/login" />
+} />
+File 5 — client/src/pages/admin.tsx (stub only — full build in S5-02)
+
+Copyexport default function AdminPage() {
+  return (
+    <div style={{ padding: '2rem', color: '#E2E8F0' }}>
+      <h2>👥 Admin — Parent/Child Account Management</h2>
+      <p style={{ color: '#718096' }}>S5-02: This panel builds here. Coming next.</p>
+    </div>
+  );
+}
+Add "Admin" nav item to app-sidebar.tsx — visible only when user.is_parent === true.
+
+VALIDATION — 4 CHECKS
+#	Test	Expected
+V1	Open app root / without JWT in localStorage	Redirect to /login, card centered, background tiles visible
+V2	Register new org via "Get Started" tab	201, auto-login (SKIP_2FA=true), redirect to /protected, trial banner visible, 14 seeded tickets showing
+V3	Logout (clear localStorage), Sign In with registered credentials	JWT returned directly (SKIP_2FA), redirect to /protected
+V4	Sign In with wrong password	401, "Invalid email or password" displayed on card, no redirect
+Score 4/4. Report back with screenshots or console output for each. Senior Architect review before S5-02.
+
+One reminder going into this build: Keep it clean. No Stripe hooks, no OTP screen markup, no feature additions beyond what is listed. The UI must be stable before anything layers on top of it. When you come back with the V1–V4 results, we move immediately to S5-02 — the Parent/Child admin panel.

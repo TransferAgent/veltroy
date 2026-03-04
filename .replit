@@ -75,3 +75,4 @@ outputType = "console"
 [userenv.shared]
 JWT_SECRET = "ndr-platform-jwt-secret-v1.2-lab"
 FLASK_BUS_URL = "http://localhost:8000"
+SKIP_2FA = "true"
