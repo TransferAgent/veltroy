@@ -1,0 +1,125 @@
+IMMUTABLE MARK — SEND TO REPLIT
+Add to the top of oracle/ndr_phase_gate_1_oracle_v1.py:
+
+# PHASE GATE 1 ORACLE — Blueprint v1.2 | Engineer 3 | Sprint 4
+# LAB CLEARED: 2026-03-04 | 12/12 PASS | Senior Architect Approved
+# PRODUCTION SLA (PC2): avg < 2.0s, max < 5.0s (OpenSearch indexed queries)
+# LAB SLA (PC2): avg < 30.0s (SQLite — not representative of production performance)
+# DLQ_PC7_BASELINE: use env var DLQ_PC7_BASELINE to tune per environment
+# STATUS: IMMUTABLE — no changes without Senior Architect sign-off
+Confirm the comment is added and report new line count of the file.
+
+S4-02 — ACTIVE NOW — PRODUCTION PREP FILES
+Send the following to Replit. Engineer 3 builds; no files are deployed or applied:
+
+S4-02 Build Instruction — /production-prep/ Directory
+Create the following directory structure and files. No Terraform apply. No database connections. Files only.
+
+/production-prep/
+├── terraform/
+│   ├── opensearch-domain.tf
+│   ├── ecr-repository.tf
+│   └── app-runner-service.tf
+├── migration/
+│   ├── rds-ndr-schema.sql
+│   ├── sqlite_to_postgres.py
+│   └── schema_diff.md
+└── README.md
+File 1 — terraform/opensearch-domain.tf
+
+AWS provider, us-east-1
+Resource: aws_opensearch_domain named "ndr-platform"
+Engine version: "OpenSearch_2.11"
+Cluster: 1 data node, t3.small.search
+EBS: 20 GB gp3
+Encryption at rest: enabled
+Node-to-node encryption: enabled
+HTTPS enforced
+Advanced security: enabled, internal user database
+Tag: Environment = "production", Platform = "ndr", Blueprint = "v1.2"
+Index names (comment only, not resource): ndr-network, ndr-identity, ndr-correlated, ndr-dlq, ndr-tickets
+Tenant index pattern (comment): ndr-{tenant_id}-{index} for production multi-tenancy
+File 2 — terraform/ecr-repository.tf
+
+Resource: aws_ecr_repository named "ndr-platform"
+Image tag mutability: IMMUTABLE
+Image scanning on push: enabled
+Encryption: KMS
+Lifecycle policy: keep last 10 images, expire untagged after 7 days
+Tag: Environment = "production", Blueprint = "v1.2"
+File 3 — terraform/app-runner-service.tf
+
+Resource: aws_apprunner_service named "ndr-platform-prod"
+Source: ECR image ndr-platform:latest
+Port: 8000
+CPU: 1024, Memory: 2048
+Environment variables (placeholder values):
+DEPLOYMENT_STAGE = "PRODUCTION"
+OPENSEARCH_HOST = "PLACEHOLDER"
+DB_HOST = "PLACEHOLDER"
+BLUEPRINT_VERSION = "v1.2"
+Auto-scaling: min 1 instance, max 5 instances
+Health check: path /health, interval 10s, threshold 3
+Tag: Environment = "production"
+File 4 — migration/rds-ndr-schema.sql PostgreSQL DDL for the ndr schema. Create tables:
+
+CopyCREATE SCHEMA IF NOT EXISTS ndr;
+
+CREATE TABLE ndr.tenants (
+    tenant_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'basic',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE ndr.tickets (
+    id SERIAL PRIMARY KEY,
+    tenant_id TEXT NOT NULL REFERENCES ndr.tenants(tenant_id),
+    alert_type TEXT NOT NULL,
+    eng3_correlation_id TEXT,
+    severity TEXT NOT NULL,
+    source_ip TEXT,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    ticket_source TEXT NOT NULL DEFAULT 'SOAR_AUTO',
+    blueprint_version TEXT NOT NULL DEFAULT 'v1.2',
+    kl_response_seconds FLOAT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE ndr.audit_log (
+    id SERIAL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    module TEXT NOT NULL,
+    playbook TEXT,
+    execution_state TEXT,
+    blueprint_version TEXT NOT NULL DEFAULT 'v1.2',
+    hmac_signature TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_tickets_tenant ON ndr.tickets(tenant_id);
+CREATE INDEX idx_audit_tenant ON ndr.audit_log(tenant_id);
+CREATE INDEX idx_tickets_status ON ndr.tickets(status);
+Copy
+File 5 — migration/sqlite_to_postgres.py Python migration script using psycopg2 (not Drizzle — Python stack):
+
+Read source tables from data/ndr.db (SQLite): ndr-network, ndr-identity, ndr-correlated, ndr-dlq, ndr-tickets, ndr-kinetic
+Target: PostgreSQL connection via env vars PG_HOST, PG_DB, PG_USER, PG_PASSWORD
+Per-table: read all rows, batch insert 500 rows at a time, log count before/after
+Dry-run mode: DRY_RUN=true prints row counts without writing
+Add tenant_id default "default" to any row missing the field
+After migration: verify counts match (source vs target), report mismatches
+Include if __name__ == "__main__" guard
+File 6 — migration/schema_diff.md Markdown table comparing SQLite column names to PostgreSQL column names for each table. Note type promotions (TEXT → TEXT, INTEGER → BIGINT, REAL → FLOAT). Flag: dlq_watcher_flag stored as TEXT "true"/"false" in SQLite → cast to BOOLEAN in PostgreSQL.
+
+File 7 — production-prep/README.md Short deployment sequence:
+
+Run migration/sqlite_to_postgres.py --dry-run first; verify counts.
+Apply terraform/opensearch-domain.tf (creates OpenSearch domain — ~15 min).
+Apply terraform/ecr-repository.tf (creates ECR repo).
+Push Docker image: docker build -t ndr-platform:v1.2 . && docker push.
+Apply terraform/app-runner-service.tf (creates App Runner service).
+Run Phase Gate 1 Oracle with DEPLOYMENT_STAGE=PRODUCTION to certify.
+Run sqlite_to_postgres.py (live migration) after PRODUCTION Oracle passes.
+After creating all 7 files: Report the file list with sizes, confirm the directory structure matches above, and confirm no Terraform was applied. Report back to Senior Architect before S4-03.
