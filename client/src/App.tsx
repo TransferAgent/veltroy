@@ -19,6 +19,7 @@ import AttackPatternsPage from "@/pages/attack-patterns";
 import SigmaRulesPage from "@/pages/sigma-rules";
 import CorrelatedPage from "@/pages/correlated";
 import KineticPage from "@/pages/kinetic";
+import ProtectedView from "@/pages/protected";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/kinetic" component={KineticPage} />
       <Route path="/responses" component={Responses} />
       <Route path="/pipeline" component={Pipeline} />
+      <Route path="/protected" component={ProtectedView} />
       <Route component={NotFound} />
     </Switch>
   );

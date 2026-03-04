@@ -3,12 +3,15 @@ import { createServer, type Server } from "http";
 import { pipeline } from "./pipeline";
 import { updateThreatStatusSchema } from "@shared/schema";
 import { getInterfaceContractSchema } from "./engines/kinetic-eng";
+import ndrProxyRouter from "./routes/ndrProxy";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   pipeline.start();
+
+  app.use(ndrProxyRouter);
 
   app.get("/api/dashboard/stats", (_req, res) => {
     res.json(pipeline.getDashboardStats());

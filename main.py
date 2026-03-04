@@ -205,9 +205,32 @@ def audit_kinetic_rollback():
     }), 200
 
 
+@app.route('/v1/tickets', methods=['GET'])
+def get_tickets():
+    tenant_id = request.args.get('tenant_id', 'default')
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if tenant_id == 'all':
+            rows = conn.execute(
+                "SELECT * FROM 'ndr-tickets' ORDER BY timestamp DESC LIMIT 100"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM 'ndr-tickets' WHERE tenant_id=? ORDER BY timestamp DESC LIMIT 100",
+                (tenant_id,)
+            ).fetchall()
+        tickets = [dict(r) for r in rows]
+    except Exception:
+        tickets = []
+    finally:
+        conn.close()
+    return jsonify({"tickets": tickets, "tenant_id": tenant_id, "count": len(tickets)})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 8000))
     print(f"[main.py] Flask Bus starting on port {port}")
-    print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health | GET /dlq/health")
+    print(f"[main.py] Endpoints: POST /run | GET /stats | GET /health | GET /dlq/health | GET /v1/tickets")
     print(f"[main.py] Engineer 3 API: POST /v1/state/kinetic | GET /v1/audit/kinetic/<id> | POST /v1/audit/kinetic/rollback")
     app.run(host="0.0.0.0", port=port, debug=False)

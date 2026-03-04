@@ -23,6 +23,7 @@ import {
   Flame,
   GitMerge,
   Crosshair,
+  ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -39,6 +40,7 @@ const navItems = [
   { title: "Kinetic Layer", url: "/kinetic", icon: Crosshair },
   { title: "Response Actions", url: "/responses", icon: Zap },
   { title: "Pipeline Monitor", url: "/pipeline", icon: Activity },
+  { title: "Protected View", url: "/protected", icon: ShieldCheck },
 ];
 
 export function AppSidebar() {
