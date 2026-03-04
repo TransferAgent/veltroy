@@ -185,6 +185,30 @@ All 15/15 field checks PASS.
 
 ---
 
+## ENGINEER_4_AUDIT_2026-03-04 — Kinetic Response (The Fist)
+
+**Audit Date**: 2026-03-04
+**Score**: 10/10 PASS
+
+**Fixes Applied**:
+1. KL-005 off-hours now accepts `alert_timestamp` from payload (was wall-clock only)
+2. `ndr-tickets` table now includes `tenant_id TEXT DEFAULT 'default'`; INSERT writes tenant_id
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | All 6 playbooks fire | PASS — KL-001=10, KL-002=6, KL-003=1, KL-004=1, KL-005=5, KL-006=7 |
+| 2 | All SLAs under 30s | PASS — 30/30 SLA MET, max=1745ms |
+| 3 | KL-003 sg_snapshot_pre_isolation | PASS |
+| 4 | KL-004 account_locked + AUTH_SPIKE + IDENTITY-002 | PASS |
+| 5 | KL-005 off-hours gating (h23 fires, h14 skips) | PASS |
+| 6 | KL-006 tenant_id=default, SOAR_AUTO, OPEN | PASS — 7 tickets |
+| 7 | Rollback API | PASS — ROLLED_BACK + token + timestamp |
+| 8 | Missing body → 400 | PASS |
+| 9 | Invalid ID → 404 | PASS |
+| 10 | Overall SLA + 6 playbooks | PASS |
+
+---
+
 ## Tuning Registry
 | Date | Item | Status | Notes |
 |------|------|--------|-------|

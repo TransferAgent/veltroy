@@ -1,0 +1,20 @@
+AUDIT STEP 5 — FINAL STEP — SEND THIS TO REPLIT NOW
+"Engineer 4 Audit — Kinetic Response (Automation Fist). This is the final Global Test audit step. Run the following and report each result separately:
+
+1. Trigger 10 kinetic executions from mock alerts covering all 6 playbooks in one pipeline run. Minimum composition: 2× KL-001 (C2_BEACON SG isolation), 1× KL-002 (IAM key kill), 1× KL-003 (LATERAL_MOVE port revoke + SG snapshot), 1× KL-004 (BRUTE_FORCE_SUCCESS account lock + IDENTITY-002 emit), 1× KL-005 (off-hours condition — force the timestamp to hour=23 UTC to satisfy the trigger), 3× KL-006 (CRITICAL alert → SOAR ticket to ndr-tickets). Report: which playbooks fired, execution count per playbook, and total executions.
+
+2. SLA verification for every execution: KL-001 (target avg ~1.009s), KL-003 (target ~0.304s), KL-004 (target ~1.493s), KL-005 (target ~0.925–1.099s), KL-006 (target <1s). ALL must be under 30s hard ceiling. Report actual SLA per playbook.
+
+3. Confirm KL-003 writes labels.sg_snapshot_pre_isolation to the correlated record in ndr-correlated.
+
+4. Confirm KL-004 sets labels.account_locked=true and labels.lock_reason=AUTH_SPIKE and emits an IDENTITY-002 escalation event to ndr-identity with severity=CRITICAL.
+
+5. Confirm KL-005 fires only on the forced off-hours timestamp (hour=23). Then run the same alert with hour=14 (business hours) and confirm KL-005 does NOT fire. Report both results.
+
+6. Confirm KL-006 writes tenant_id="default" and ticket_source=SOAR_AUTO on all 3 SOAR tickets in ndr-tickets.
+
+7. Execute rollback on one KL-001 execution via POST /v1/audit/kinetic/rollback with a test token. Confirm: execution_state=ROLLED_BACK, rollback token stored, rolled_back_at ISO-8601 timestamp present.
+
+8. Confirm error handling: send POST /v1/state/kinetic with missing body — expect 400. Send GET /v1/audit/kinetic/INVALID_ID_THAT_DOES_NOT_EXIST — expect 404.
+
+Score as X/10. If 10/10 add comment # AUDIT PASSED – Blueprint v1.2 Sprint 3 to the top of modules/kinetic_eng.py and report back with the final Global Test summary."
