@@ -263,6 +263,12 @@ All 15/15 field checks PASS.
 
 ---
 
+## BATTLE-HARDENED DECLARATION — 2026-03-04
+
+Platform declared BATTLE-HARDENED on 2026-03-04 following completion of the Global Test audit series. Global Test result: 6/6 steps PASS. Oracle Phase Gate 0: 7/7 PASS (re-verified). Engineer scores: Eng1 12/12, Eng2 13/13, Eng3 10/10, Eng4 10/10. All modules IMMUTABLE. Audit fixes applied: (1) ECS Guardian independent field validation — detection_eng.py; (2) _update_correlated_record fallback lookup — main.py; (3) KL-005 alert_timestamp override — kinetic_eng.py; (4) KL-006 tenant_id schema column — kinetic_eng.py. Platform version: v1.2. ECS version: 8.11.0. DEPLOYMENT_STAGE: LAB. Sprint 3: CLOSED. Sprint 4: OPEN. First item: oracle/ndr_phase_gate_1_oracle_v1.py (Engineer 3). GitHub day preconditions: ALL MET. Tag: v1.2-battle-hardened.
+
+---
+
 ## Tuning Registry
 | Date | Item | Status | Notes |
 |------|------|--------|-------|
