@@ -1,0 +1,321 @@
+Email Verification Code Flow — From Console Logs to AWS SES
+
+How Tableicty handles 2FA verification codes, starting with development-mode console logging and graduating to production email delivery via AWS SES.
+Architecture Overview
+
+The verification code system is a single module (server/email-verification.ts) that handles:
+
+    Code generation (cryptographically random 6-digit number)
+    Secure storage (bcrypt-hashed, never stored in plaintext)
+    Validation (with expiry and attempt limits)
+    Delivery (console log always + AWS SES when configured)
+
+The key design decision: console logging is permanent, not temporary. Even in production with SES fully configured, the code is still logged to the server console. This provides a reliable fallback and makes debugging straightforward.
+Database Table
+
+-- In public schema (not per-tenant)
+CREATE TABLE email_verifications (
+  id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     VARCHAR NOT NULL,
+  code_hash   TEXT NOT NULL,          -- bcrypt hash of the 6-digit code
+  expires_at  TEXT NOT NULL,          -- ISO timestamp, 10 minutes from creation
+  attempts    INTEGER NOT NULL DEFAULT 0,  -- failed validation attempts (max 5)
+  used        BOOLEAN NOT NULL DEFAULT false,  -- marks code as consumed
+  created_at  TEXT NOT NULL           -- ISO timestamp
+);
+
+Drizzle schema equivalent (in shared/schema.ts):
+
+export const emailVerifications = pgTable("email_verifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  codeHash: text("code_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  used: boolean("used").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+});
+
+Phase 1: Console-Only (Development Mode)
+
+When you first build the system, you don't need AWS SES at all. The code is logged to the server console and you read it from the workflow logs.
+Code Generation
+
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+function generateCode(): string {
+  // crypto.randomInt produces a cryptographically secure integer
+  // Range: 100000–999999 (always 6 digits, no leading zeros)
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+Code Storage
+
+The plaintext code is never stored in the database. Only the bcrypt hash is persisted:
+
+export async function createVerificationCode(userId: string): Promise<string> {
+  const code = generateCode();
+  const codeHash = await bcrypt.hash(code, 10);  // salt factor 10
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10-minute window
+  await db.insert(emailVerifications).values({
+    userId,
+    codeHash,
+    expiresAt,
+    attempts: 0,
+    used: false,
+    createdAt: new Date().toISOString(),
+  });
+  return code; // plaintext code returned to caller for delivery
+}
+
+Console Delivery (Always Active)
+
+export async function sendVerificationEmail(email: string, code: string): Promise<void> {
+  // THIS ALWAYS RUNS — development AND production
+  console.log(`\n========================================`);
+  console.log(`[EMAIL VERIFICATION] Code for ${email}: ${code}`);
+  console.log(`========================================\n`);
+  // SES delivery added later (see Phase 2)
+}
+
+How to Retrieve the Code During Development
+
+    Submit login credentials on the frontend
+    Open your server workflow logs (not the browser console)
+    Look for the log line:
+
+    ========================================
+    [EMAIL VERIFICATION] Code for user@example.com: 847291
+    ========================================
+
+    Copy the 6-digit number and enter it on the MFA screen
+
+In Replit, workflow logs are accessible through the "Start application" workflow panel.
+Phase 2: Adding AWS SES (Production Email Delivery)
+
+SES delivery is added inside the same function, gated by environment variable checks. The console log remains — SES is additive, not a replacement.
+Required Environment Variables
+Variable	Purpose	Example
+AWS_ACCESS_KEY_ID	IAM user access key	AKIA...
+AWS_SECRET_ACCESS_KEY	IAM user secret key	wJal...
+AWS_SES_REGION	SES region	us-east-1
+AWS_SES_FROM_EMAIL	Verified sender address	noreply@yourdomain.com
+
+Store these as Replit Secrets (environment variables), never in code.
+The Gate Check
+
+SES only fires when all four environment variables are present:
+
+export async function sendVerificationEmail(email: string, code: string): Promise<void> {
+  // ALWAYS log to console (development fallback)
+  console.log(`\n========================================`);
+  console.log(`[EMAIL VERIFICATION] Code for ${email}: ${code}`);
+  console.log(`========================================\n`);
+  // CHECK: Are AWS credentials configured?
+  const sesRegion = process.env.AWS_SES_REGION;
+  const fromEmail = process.env.AWS_SES_FROM_EMAIL;
+  const hasAwsCreds = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+  if (sesRegion && fromEmail && hasAwsCreds) {
+    // SES delivery runs in a fire-and-forget async block
+    // This prevents SES failures from blocking the login response
+    (async () => {
+      try {
+        const { SESClient, SendEmailCommand } = await import("@aws-sdk/client-ses");
+        const ses = new SESClient({ region: sesRegion });
+        await ses.send(new SendEmailCommand({
+          Source: fromEmail,
+          Destination: { ToAddresses: [email] },
+          Message: {
+            Subject: {
+              Data: "Tableicty - Verify Your Email",
+              Charset: "UTF-8",
+            },
+            Body: {
+              Html: {
+                Charset: "UTF-8",
+                Data: `
+                  <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+                    <h2 style="color: #1e3a5f;">Tableicty</h2>
+                    <p>Your verification code is:</p>
+                    <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; text-align: center; padding: 16px; background: #f4f6f8; border-radius: 8px; margin: 16px 0;">
+                      ${code}
+                    </div>
+                    <p style="color: #666; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+                  </div>
+                `,
+              },
+              Text: {
+                Charset: "UTF-8",
+                Data: `Your Tableicty verification code is: ${code}\n\nThis code expires in 10 minutes.`,
+              },
+            },
+          },
+        }));
+        console.log(`[EMAIL] Verification code sent to ${email} via AWS SES`);
+      } catch (err) {
+        // SES failure is non-fatal — user can still get code from console log
+        console.error(`[EMAIL] SES send failed (code was logged above):`, err);
+      }
+    })();
+  }
+  // If SES not configured, function returns immediately
+  // The code was already logged to console above
+}
+
+Key Design Decisions
+
+    Fire-and-forget async block: The SES call runs in a detached (async () => { ... })() block. This means the login API response returns immediately — the user sees the MFA screen without waiting for email delivery.
+
+    Non-fatal SES errors: If SES throws (bad credentials, unverified email, rate limit), the catch block logs the error but doesn't crash the login flow. The code was already logged to console, so the developer/user can still complete login.
+
+    Dynamic import: @aws-sdk/client-ses is imported dynamically inside the function, not at the top of the file. This means the SES SDK only loads when actually needed, and the module doesn't fail to import if the SDK isn't installed.
+
+    Dual-format email: Both HTML and plain text bodies are sent. The HTML version has branded styling with a large code display. The plain text version is a simple fallback for email clients that don't render HTML.
+
+Code Validation
+
+When the user submits their 6-digit code, validation runs through multiple checks:
+
+export async function verifyCode(
+  userId: string,
+  code: string
+): Promise<{ success: boolean; message: string }> {
+  // 1. Find the most recent UNUSED code for this user
+  const [verification] = await db
+    .select()
+    .from(emailVerifications)
+    .where(
+      and(
+        eq(emailVerifications.userId, userId),
+        eq(emailVerifications.used, false)
+      )
+    )
+    .orderBy(desc(emailVerifications.createdAt))
+    .limit(1);
+  // Guard: no code exists
+  if (!verification) {
+    return { success: false, message: "No verification code found. Please request a new one." };
+  }
+  // Guard: code has expired (10-minute window)
+  if (new Date(verification.expiresAt) < new Date()) {
+    return { success: false, message: "Verification code has expired. Please request a new one." };
+  }
+  // Guard: too many failed attempts (brute-force protection)
+  if (verification.attempts >= 5) {
+    return { success: false, message: "Too many failed attempts. Please request a new code." };
+  }
+  // Validate: compare submitted code against stored bcrypt hash
+  const isValid = await bcrypt.compare(code, verification.codeHash);
+  if (!isValid) {
+    // Increment attempt counter (but don't invalidate the code yet)
+    await db
+      .update(emailVerifications)
+      .set({ attempts: verification.attempts + 1 })
+      .where(eq(emailVerifications.id, verification.id));
+    return { success: false, message: "Invalid verification code." };
+  }
+  // SUCCESS: Mark code as used (one-time use)
+  await db
+    .update(emailVerifications)
+    .set({ used: true })
+    .where(eq(emailVerifications.id, verification.id));
+  // Also mark the user's email as verified
+  await db
+    .update(users)
+    .set({ emailVerified: true })
+    .where(eq(users.id, userId));
+  return { success: true, message: "Email verified successfully." };
+}
+
+Validation Chain Summary
+
+Submit code
+  → Find most recent unused code for user
+    → Check not expired (10-minute window)
+      → Check attempts < 5 (brute-force limit)
+        → bcrypt.compare(submitted, stored_hash)
+          → PASS: mark used=true, emailVerified=true
+          → FAIL: increment attempts counter
+
+Rate Limiting (Resend Cooldown)
+
+Users can request new codes, but not faster than once per 60 seconds:
+
+export async function canResendCode(userId: string): Promise<boolean> {
+  const [recent] = await db
+    .select()
+    .from(emailVerifications)
+    .where(eq(emailVerifications.userId, userId))
+    .orderBy(desc(emailVerifications.createdAt))
+    .limit(1);
+  if (!recent) return true; // no previous code, allow immediately
+  const timeSince = Date.now() - new Date(recent.createdAt).getTime();
+  return timeSince > 60 * 1000; // 60-second cooldown
+}
+
+How Login Uses This Module
+
+The login flow in server/auth.ts calls this module at two points:
+Phase 1 — After credential validation (but before login):
+
+app.post("/api/auth/login", (req, res, next) => {
+  passport.authenticate("local", async (err, user, info) => {
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    // Store user ID in session (NOT logged in yet)
+    (req.session as any).pendingMfaUserId = user.id;
+    (req.session as any).pendingMfaEmail = user.email;
+    await req.session.save();  // explicit save to ensure session persists
+    // Generate code → store hash → log to console → send email
+    const code = await createVerificationCode(user.id);
+    await sendVerificationEmail(user.email, code);
+    return res.json({ requiresMfa: true, maskedEmail: "****17@gmail.com" });
+  })(req, res, next);
+});
+
+Phase 2 — MFA code submission:
+
+app.post("/api/auth/verify-login-mfa", async (req, res) => {
+  const pendingUserId = (req.session as any).pendingMfaUserId;
+  const result = await verifyCode(pendingUserId, req.body.code);
+  if (!result.success) {
+    return res.status(400).json({ message: result.message });
+  }
+  // NOW complete the actual login
+  req.login(sessionUser, (err) => {
+    return res.json({ ...sessionUser, requiresVerification: false });
+  });
+});
+
+AWS SES Setup Checklist
+
+To enable production email delivery:
+
+    Create an IAM user with AmazonSESFullAccess policy
+    Verify sender email in SES console (or verify entire domain)
+    Move out of SES sandbox (if sending to unverified recipients) — requires AWS support request
+    Set environment variables in Replit Secrets:
+        AWS_ACCESS_KEY_ID — IAM access key
+        AWS_SECRET_ACCESS_KEY — IAM secret key
+        AWS_SES_REGION — e.g., us-east-1
+        AWS_SES_FROM_EMAIL — verified sender address
+    Install SDK — @aws-sdk/client-ses package
+    Restart the application — environment variables are read at runtime
+
+No code changes are needed. Once the four environment variables are set, SES activates automatically on the next login attempt.
+Dependency: @aws-sdk/client-ses
+
+This package is dynamically imported only when SES is configured. If it's not installed, the import will fail silently in the catch block, and the code will still be available in the console log.
+
+Install with your package manager:
+
+npm install @aws-sdk/client-ses
+
+Security Properties
+Property	Implementation
+Code never stored in plaintext	bcrypt hash stored in DB
+Time-limited	10-minute expiry window
+Brute-force resistant	Max 5 attempts per code
+One-time use	used=true after successful validation
+Rate-limited resend	60-second cooldown between codes
+Transport security	HTTPS in production, console in dev
+SES failure resilience	Console log always available as fallback

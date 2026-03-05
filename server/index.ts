@@ -22,6 +22,10 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({ status: "ok", version: "v1.2", timestamp: Date.now() });
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -76,7 +80,11 @@ app.use((req, res, next) => {
     log(`Demo seed warning: ${err instanceof Error ? err.message : err}`, "startup");
   }
 
-  await registerRoutes(httpServer, app);
+  try {
+    await registerRoutes(httpServer, app);
+  } catch (err) {
+    log(`Route registration warning: ${err instanceof Error ? err.message : err}`, "startup");
+  }
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -91,9 +99,6 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
@@ -101,10 +106,6 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {
