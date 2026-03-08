@@ -6,6 +6,7 @@ import { getInterfaceContractSchema } from "./engines/kinetic-eng";
 import ndrProxyRouter from "./routes/ndrProxy";
 import authRouter from "./routes/auth";
 import adminRouter from "./routes/admin";
+import tenantDashboardRouter from "./routes/tenantDashboard";
 
 function isTrialToken(req: any): boolean {
   try {
@@ -29,6 +30,7 @@ export async function registerRoutes(
   app.use(ndrProxyRouter);
   app.use(authRouter);
   app.use(adminRouter);
+  app.use(tenantDashboardRouter);
 
   app.get("/api/dashboard/stats", (_req, res) => {
     res.json(pipeline.getDashboardStats());

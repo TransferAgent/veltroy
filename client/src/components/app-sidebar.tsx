@@ -25,6 +25,7 @@ import {
   Crosshair,
   ShieldCheck,
   Users,
+  Building2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +48,13 @@ const navItems = [
 
 const adminNavItems = [
   { title: "Tenants", url: "/tenants", icon: Users },
+] as const;
+
+const myOrgNavItems = [
+  { title: "My Dashboard", url: "/my/dashboard", icon: Building2 },
+  { title: "My Network Events", url: "/my/events", icon: Network },
+  { title: "My Identity Logs", url: "/my/identity", icon: UserCheck },
+  { title: "My Threats", url: "/my/threats", icon: ShieldAlert },
 ] as const;
 
 export function AppSidebar() {
@@ -182,6 +190,35 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        <SidebarGroup>
+          <SidebarGroupLabel>My Organization</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {myOrgNavItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    data-active={location === item.url}
+                    className="data-[active=true]:bg-sidebar-accent"
+                  >
+                    <a
+                      href={item.url}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setLocation(item.url);
+                      }}
+                      data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-3">

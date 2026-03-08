@@ -25,6 +25,10 @@ import ProtectedView from "@/pages/protected";
 import LoginPage from "@/pages/login";
 import TenantsPage from "@/pages/tenants";
 import UpgradePage from "@/pages/upgrade";
+import MyDashboard from "@/pages/my-dashboard";
+import MyThreats from "@/pages/my-threats";
+import MyEvents from "@/pages/my-events";
+import MyIdentity from "@/pages/my-identity";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -77,6 +81,10 @@ function AuthRouter() {
       <Route path="/protected" component={ProtectedView} />
       <Route path="/tenants" component={TenantsPage} />
       <Route path="/upgrade" component={UpgradePage} />
+      <Route path="/my/dashboard" component={MyDashboard} />
+      <Route path="/my/threats" component={MyThreats} />
+      <Route path="/my/events" component={MyEvents} />
+      <Route path="/my/identity" component={MyIdentity} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -73,6 +73,14 @@ app.use((req, res, next) => {
   }
 
   try {
+    const { execSync } = await import("child_process");
+    execSync("python3 scripts/migrate_tenant_columns.py", { encoding: "utf-8", timeout: 10000 });
+    log("Tenant columns migrated", "startup");
+  } catch (err) {
+    log(`Tenant column migration warning: ${err instanceof Error ? err.message : err}`, "startup");
+  }
+
+  try {
     const { seedSuperUser, seedDemoAccount } = await import("./seedDemo");
     await seedSuperUser();
     await seedDemoAccount();

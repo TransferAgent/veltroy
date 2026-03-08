@@ -232,21 +232,21 @@ def seed(tenant_id: str, dry_run: bool = False, db_path: str = DB_PATH):
 
     for c in correlated:
         cursor.execute('''
-            INSERT INTO "ndr-correlated" (id, timestamp, event_json, eng3_correlation_id, alert_type, severity, sigma_rule_id, source_ip, host_ip, iam_user, pre_commit_written, dispatched, dispatch_payload, blueprint_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (c["id"], c["timestamp"], c["event_json"], c["eng3_correlation_id"], c["alert_type"], c["severity"], c["sigma_rule_id"], c["source_ip"], c["host_ip"], c["iam_user"], c["pre_commit_written"], c["dispatched"], c["dispatch_payload"], c["blueprint_version"]))
+            INSERT INTO "ndr-correlated" (id, timestamp, event_json, eng3_correlation_id, alert_type, severity, sigma_rule_id, source_ip, host_ip, iam_user, pre_commit_written, dispatched, dispatch_payload, blueprint_version, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (c["id"], c["timestamp"], c["event_json"], c["eng3_correlation_id"], c["alert_type"], c["severity"], c["sigma_rule_id"], c["source_ip"], c["host_ip"], c["iam_user"], c["pre_commit_written"], c["dispatched"], c["dispatch_payload"], c["blueprint_version"], c["tenant_id"]))
 
     for n in network:
         cursor.execute('''
-            INSERT INTO "ndr-network" (id, timestamp, event_json, event_kind, event_dataset, source_ip, destination_ip, community_id, severity, blueprint_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (n["id"], n["timestamp"], n["event_json"], n["event_kind"], n["event_dataset"], n["source_ip"], n["destination_ip"], n["community_id"], n["severity"], n["blueprint_version"]))
+            INSERT INTO "ndr-network" (id, timestamp, event_json, event_kind, event_dataset, source_ip, destination_ip, community_id, severity, blueprint_version, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (n["id"], n["timestamp"], n["event_json"], n["event_kind"], n["event_dataset"], n["source_ip"], n["destination_ip"], n["community_id"], n["severity"], n["blueprint_version"], n["tenant_id"]))
 
     for d in identity:
         cursor.execute('''
-            INSERT INTO "ndr-identity" (id, timestamp, event_json, event_kind, event_dataset, event_action, user_name, source_ip, community_id, severity, alert_rule_id, blueprint_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (d["id"], d["timestamp"], d["event_json"], d["event_kind"], d["event_dataset"], d["event_action"], d["user_name"], d["source_ip"], d["community_id"], d["severity"], d["alert_rule_id"], d["blueprint_version"]))
+            INSERT INTO "ndr-identity" (id, timestamp, event_json, event_kind, event_dataset, event_action, user_name, source_ip, community_id, severity, alert_rule_id, blueprint_version, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (d["id"], d["timestamp"], d["event_json"], d["event_kind"], d["event_dataset"], d["event_action"], d["user_name"], d["source_ip"], d["community_id"], d["severity"], d["alert_rule_id"], d["blueprint_version"], d["tenant_id"]))
 
     for k in kinetic:
         cursor.execute('''

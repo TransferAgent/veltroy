@@ -41,6 +41,15 @@ The backend is an Express.js server in TypeScript orchestrating the NDR pipeline
 - **2FA/OTP (Tableicty Pattern)**: crypto.randomInt code generation, bcrypt-only hash storage (plaintext never persisted), 5-attempt brute-force protection, server-side 60s resend rate limit, pending JWT token (no role) for OTP session, masked email (****XX@domain.com), console log always active, SES fire-and-forget when AWS env vars present. SKIP_2FA env var for emergency bypass.
 - Includes parent/child user invite functionality and role-specific access controls.
 
+**Tenant-Scoped Data Layer ("My House"):**
+- Pipeline event tables (`ndr-network`, `ndr-identity`, `ndr-correlated`) have `tenant_id TEXT DEFAULT 'global'` columns added via `scripts/migrate_tenant_columns.py` (runs on startup, idempotent).
+- `server/db/tenantData.ts` provides tenant-scoped queries: getMyEvents, getMyThreats, getMyStats, getMyIdentityLogs.
+- `server/routes/tenantDashboard.ts` exposes `/api/my/events`, `/api/my/threats`, `/api/my/stats`, `/api/my/identity`, `/api/my/correlations` — all JWT-authenticated, filtered by `ndr_tenant_id`.
+- 4 new "My Organization" pages: `my-dashboard.tsx`, `my-threats.tsx`, `my-events.tsx`, `my-identity.tsx`.
+- Sidebar has additive "My Organization" section visible to all authenticated users.
+- `scripts/seed_tenant_starter_data.py` seeds 8 rows (3 network, 3 identity, 2 correlated) per tenant on registration.
+- City View (existing pages) = `tenant_id='global'` data, untouched. My Organization = tenant-scoped data.
+
 **Production Readiness:**
 - Terraform configurations for OpenSearch, ECR, and App Runner are defined.
 - SQL DDL for PostgreSQL and a migration script from SQLite to PostgreSQL are prepared for production deployment.

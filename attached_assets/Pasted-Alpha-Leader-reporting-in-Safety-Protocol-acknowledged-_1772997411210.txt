@@ -1,0 +1,82 @@
+Alpha Leader reporting in.
+Safety Protocol acknowledged and respected.
+The multi-tenancy gap you identified is real and critical — exactly as you and Replit diagnosed.
+We have:
+
+Solid engine room (auth, JWT with ndr_tenant_id, parent/child model, RBAC)
+Solid address & doorbell (tenant_id generation, isolation in tickets/audit_log)
+But no furniture inside the houses — the dashboard endpoints (/api/events, /api/threats, /api/dashboard/stats, etc.) are still serving the global seeded pipeline to every user.
+
+This breaks the Power Grid vision:
+
+Super Admin (you) must see the full City View
+Every tenant must see only their own house (My Organization / TransformerOwnerView)
+
+Your 5-step plan is excellent — new files only, zero touching of existing engine or City View code. It keeps Blueprint v1.2 immutable and preserves the split-brain architecture (TypeScript proxy on 5000 stays untouched).
+Alpha Leader Guidance & Minor Refinements
+Your plan is approved with two small, safe refinements (both still new files only):
+
+Use the existing SQLite (data/ndr.db) with a tenant_id filter instead of a brand-new separate store. This avoids schema duplication and keeps migration simple later.
+Add a simple role-based toggle in the sidebar (already in your existing navigation) so super_admin can still switch to City View. Tenants only ever see "My Organization".
+
+Everything else in your 5 steps is perfect.
+Safety Protocol is now RELEASED.
+You may proceed. Below are the exact copy-paste prompts for Replit (one per step). Send them in order and wait for each to complete + confirm before the next.
+Exact Replit Prompts (Send One at a Time)
+Step 1 – Tenant Data Store (new file only)
+"Replit, create file server/db/tenantData.ts (TypeScript) — new file only, do not modify any existing files.
+This file will provide tenant-scoped data access using the existing SQLite database (data/ndr.db) with tenant_id filter on every query.
+Export these functions:
+
+getMyEvents(tenantId: string, limit?: number)
+getMyThreats(tenantId: string, limit?: number)
+getMyStats(tenantId: string)
+getMyIdentityLogs(tenantId: string, limit?: number)
+getMyCorrelations(tenantId: string, limit?: number)
+
+Each function runs a SELECT with WHERE tenant_id = ? and returns clean JSON. Use better-sqlite3 like the existing authDb.ts pattern. No global pipeline access. Test with a sample tenant_id and console.log the result."
+Step 2 – Tenant-Scoped API Endpoints (new file only)
+"Replit, create file server/routes/tenantDashboard.ts (new file only).
+Register a new router with these endpoints:
+
+GET /api/my/events
+GET /api/my/threats
+GET /api/my/stats
+GET /api/my/identity
+GET /api/my/correlations
+
+Each endpoint reads the JWT's ndr_tenant_id from req.user, calls the corresponding function from tenantData.ts, and returns the data. Add to server/routes.ts as a new router mount (e.g. app.use('/api/my', tenantDashboardRouter);). No existing routes modified. Test by calling one endpoint with a valid tenant JWT."
+Step 3 – New "My Organization" Dashboard Pages (brand new files)
+"Replit, create four brand new page files in client/src/pages/ (no existing files touched):
+
+my-dashboard.tsx
+my-threats.tsx
+my-events.tsx
+my-identity.tsx
+
+Each page uses TanStack Query to fetch from /api/my/* endpoints, displays clean cards and lists (styled exactly like existing pages), and shows "My Organization — [Tenant Name]". Link them later. Do not modify any existing page files."
+Step 4 – Add "My Organization" to Sidebar (new navigation group only)
+"Replit, add a new navigation group called 'My Organization' to the existing sidebar component (new section only, do not change any existing links).
+Place it below the current sections. Links:
+
+My Dashboard
+My Threats
+My Events
+My Identity
+
+Use the same styling as the rest of the sidebar. For non-customer roles (super_admin/owner), also show a toggle 'City View' that links back to the original dashboard. No existing navigation items changed."
+Step 5 – Tenant Starter Seed (new script only)
+"Replit, create new script scripts/seed_tenant_starter_data.py (brand new file only).
+When a new tenant registers (after tenant creation), run this script with the new tenant_id. It should insert 8–10 sample rows (2 threats, 3 events, 2 correlations, 3 identity logs) all stamped with that tenant_id so the house is not empty. Use the same table structure as existing data. Make it callable from the register flow later. Include a dry-run mode."
+After These 5 Steps
+Once Replit confirms all five are complete:
+
+Test flow: Register new user → complete OTP → login → you should now see only "My Organization" with starter data (no City View unless super_admin).
+Super Admin still sees full City View.
+Then we immediately add the toggle switch and polish the views.
+
+This fixes the "My House" problem cleanly, keeps the engine untouched, and gets us back on track for S5-05 GitHub push.
+Safety Protocol released.
+Issue the first prompt (Step 1) to Replit now.
+When it finishes, paste the confirmation here and we'll continue with Step 2.
+Ready when you are, Grid Operator. Let's give every tenant their own furniture.
