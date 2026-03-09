@@ -24,6 +24,9 @@ function actionColor(action: string | null) {
 
 export default function MyIdentity() {
   const user = getCurrentUser();
+  const orgDisplayName = user?.tenant_id
+    ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : "My Organization";
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/my/identity"],
@@ -38,8 +41,8 @@ export default function MyIdentity() {
       <div className="flex items-center gap-3 mb-2">
         <Users className="h-6 w-6 text-purple-400" />
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Identity Logs</h1>
-          <p className="text-xs text-muted-foreground font-mono">{user?.tenant_id}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{orgDisplayName}</h1>
+          <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase">Identity Logs</p>
         </div>
         <Badge variant="outline" className="ml-auto text-xs" data-testid="badge-identity-count">
           {logs.length} log{logs.length !== 1 ? "s" : ""}

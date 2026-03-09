@@ -16,7 +16,9 @@ function fetchWithAuth(url: string) {
 
 export default function MyDashboard() {
   const user = getCurrentUser();
-  const tenantName = user?.tenant_id || "My Organization";
+  const orgDisplayName = user?.tenant_id
+    ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+    : "My Organization";
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/my/stats"],
@@ -44,10 +46,10 @@ export default function MyDashboard() {
         <Shield className="h-6 w-6 text-primary" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-org-title">
-            My Organization
+            {orgDisplayName}
           </h1>
-          <p className="text-xs text-muted-foreground font-mono" data-testid="text-tenant-id">
-            {tenantName}
+          <p className="text-[10px] text-muted-foreground font-medium tracking-wide uppercase" data-testid="text-tenant-id">
+            Command Center
           </p>
         </div>
       </div>

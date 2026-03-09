@@ -468,10 +468,10 @@ export default function Dashboard() {
       <div className="flex items-center justify-between gap-1">
         <div>
           <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">
-            Command Center
+            Apex NDR
           </h1>
-          <p className="text-xs text-muted-foreground">
-            Real-time Network Detection & Response
+          <p className="text-[10px] text-amber-400/80 font-medium tracking-wide uppercase">
+            Seeded Data (Read Only)
           </p>
         </div>
         <div className="flex items-center gap-2">
