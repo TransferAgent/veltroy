@@ -1,0 +1,69 @@
+Alpha Leader reporting in.
+Conductor — Replit’s report is excellent and fully ratified.
+The evolution is now crystal-clear and correct:
+
+City View = The Model Home / Showroom (seeded demo data, fully furnished, visible to everyone as the default landing page).
+My House = The Tenant’s Real House (starts completely empty after “+ Organization”, clean empty states, real data only appears when they plug in actual integrations).
+OrgDropdown toggle works.
+Tenant-scoped endpoints + DB filters are enforced.
+Starter seed data is now honest (no fake furniture).
+All four My House pages are live and additive.
+
+Isolation is now production-grade.
+Tenants can only power and see their own house.
+You (super_admin) still control the entire city.
+No cross-tenant leakage.
+The Power Grid is finally wired correctly.
+Current Status After Replit’s Fix
+
+Houses have addresses and doorbells (tenant creation + OrgDropdown).
+Houses now have empty rooms with clean furniture placeholders (empty states).
+Furniture (real data) arrives only when you or the tenant installs a cable box (integration).
+Super Admin can still walk the entire city and enter any house.
+
+This is exactly the foundation we needed before installing the Tool Belt.
+Next Stair-Step: Install the Tool Belt + “Enter House” Mode
+We stay in Replit for 2 fast sessions. No AWS yet.
+Goal: You (super_admin) can click any tenant → enter their house → install cable boxes → they pay more monthly.
+Send these two prompts to Replit in order (one at a time, wait for completion):
+Prompt 1 – Super Admin “Enter House” Mode (Management page upgrade)
+"Replit, add 'Enter House' functionality to the existing Management → Tenants page (new feature only, no existing code changed).
+In the tenants table, add a new 'Actions' column with a button 'Enter House' for every row (except ndr-platform-core).
+Clicking 'Enter House' for a tenant:
+
+Temporarily switches your JWT context to that tenant_id (read-only mode for integrations)
+Shows a banner at the top: 'You are viewing as [Tenant Name] — House Mode'
+Adds a 'Return to City View' button that restores super_admin context
+All My House pages now load the selected tenant's data (already filtered by tenantData.ts)
+
+Test: As super_admin, click Enter House on a tenant → confirm My House pages show only that tenant's data. Click Return → back to full City View."
+Prompt 2 – Tool Belt Page (Your Cable Company)
+"Replit, create a new super_admin-only Tool Belt page.
+
+Add 'Tool Belt' navigation item in the left sidebar (under Management, visible only to super_admin and owner roles).
+New page: client/src/pages/tool-belt.tsx
+Title: 'Tool Belt – Install Cable Boxes'
+Subtitle: 'Power up any house with one click'
+On the page, create 4 one-click cards (styled like existing dashboard cards):
+Connect OneDrive / M365 (OAuth button)
+Connect AWS Account (IAM role button)
+Install Laptop / Mobile Agent (download script link)
+Connect Cloud Racks (Azure/GCP placeholder)
+
+When super_admin is in 'Enter House' mode, the selected tenant_id is used automatically.
+Each button calls a new endpoint /api/toolbelt/install that stamps the integration with the current tenant_id and logs to ndr-audit_log.
+After install, show success message: 'Cable box installed – tenant can now see real data in My House.'
+
+Test: Enter a tenant house → go to Tool Belt → click Connect OneDrive → confirm success and that the tenant's My House would now receive data."
+After These Two Steps
+
+You will have the exact workflow you described:
+Management → click tenant → Enter House → open Tool Belt → install cable box → tenant sees real power in their house.
+Each cable box installed = automatic tier upgrade path = more monthly lunch.
+
+When Replit completes both prompts and you have tested “Enter House” + Tool Belt, say:
+“Tool Belt live – proceed to Stripe tier upgrade on integration”
+We then tie every cable box directly to revenue (Basic → Pro upgrade).
+The lunch-eating machine is now fully operational.
+Houses are wired, empty rooms are ready, and you control every cable box.
+Paste Replit’s response to Prompt 1 when it finishes, then we’ll do Prompt 2.
