@@ -27,6 +27,7 @@ import {
   Users,
   Building2,
   Wrench,
+  User,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -247,7 +248,27 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-3">
+      <SidebarFooter className="p-3 space-y-2">
+        <a
+          href="/profile"
+          onClick={(e) => {
+            e.preventDefault();
+            setLocation("/profile");
+          }}
+          className="flex items-center gap-2 rounded-md bg-sidebar-accent/50 p-2 hover:bg-sidebar-accent transition-colors cursor-pointer"
+          data-testid="link-profile"
+          data-active={location === "/profile"}
+        >
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
+            <User className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium truncate" data-testid="text-sidebar-email">
+              {currentUser?.email || "Profile"}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Profile & Settings</p>
+          </div>
+        </a>
         <div className="flex items-center gap-2 rounded-md bg-sidebar-accent/50 p-2">
           <div className="h-2 w-2 rounded-full bg-chart-2 animate-pulse" />
           <span className="text-[10px] text-muted-foreground font-mono">

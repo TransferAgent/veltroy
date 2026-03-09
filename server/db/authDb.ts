@@ -192,6 +192,11 @@ export function updateUser(id: number, fields: { email?: string; role?: string; 
   db.prepare(`UPDATE "ndr-users" SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 }
 
+export function updateUserPassword(id: number, passwordHash: string): void {
+  const db = getDb();
+  db.prepare('UPDATE "ndr-users" SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+}
+
 export function deleteUser(id: number): void {
   const db = getDb();
   db.prepare('DELETE FROM "ndr-users" WHERE id = ?').run(id);

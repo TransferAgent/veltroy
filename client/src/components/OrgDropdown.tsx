@@ -1,4 +1,4 @@
-import { Building2, Plus, LogOut, ChevronDown, Globe, Home } from "lucide-react";
+import { Building2, LogOut, ChevronDown, Globe, Home } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,9 +23,10 @@ export function OrgDropdown() {
 
   const isMyOrgView = location.startsWith("/my/");
 
-  const orgName = user?.tenant_id
-    ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : "Organization";
+  const orgName = user?.org_name
+    || (user?.tenant_id
+      ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : "Organization");
 
   const hasOrg = !!user?.tenant_id;
 
@@ -105,15 +106,6 @@ export function OrgDropdown() {
           </div>
         )}
 
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="gap-2 text-blue-400 focus:text-blue-300 cursor-pointer"
-          data-testid="menu-item-add-org"
-          onClick={() => setLocation("/login")}
-        >
-          <Plus className="h-4 w-4" />
-          Add Organization
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="gap-2 text-red-400 focus:text-red-300 cursor-pointer"

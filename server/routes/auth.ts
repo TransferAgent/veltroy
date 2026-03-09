@@ -11,6 +11,7 @@ import {
   createVerificationCode,
   verifyCode,
   canResendCode,
+  updateUserPassword,
 } from "../db/authDb";
 import { generateToken, authenticateJWT } from "../middleware/jwtAuth";
 import { sendVerificationCode, maskEmail } from "../services/emailVerification";
@@ -297,6 +298,7 @@ router.post("/auth/verify-otp", async (req: Request, res: Response) => {
         email: user.email,
         role: user.role,
         tenant_id: user.tenant_id,
+        org_name: tenant?.name || null,
         is_trial: tenant?.is_trial === 1,
         is_parent: user.is_parent === 1,
         trial_expires_at: tenant?.trial_expires_at,
@@ -353,6 +355,44 @@ router.post("/auth/resend-otp", async (req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Resend failed";
     console.error("[auth/resend-otp] Error:", message);
+    return res.status(500).json({ error: message });
+  }
+});
+
+router.post("/auth/change-password", authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    const jwtUser = req.user as any;
+    if (!jwtUser?.email) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { current_password, new_password } = req.body || {};
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: "current_password and new_password are required" });
+    }
+
+    const user = getUserByEmail(jwtUser.email);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const valid = await bcrypt.compare(current_password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    const passwordError = validatePassword(new_password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    const newHash = await bcrypt.hash(new_password, 12);
+    updateUserPassword(user.id, newHash);
+
+    return res.status(200).json({ message: "Password changed successfully" });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Password change failed";
+    console.error("[auth/change-password] Error:", message);
     return res.status(500).json({ error: message });
   }
 });

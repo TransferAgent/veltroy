@@ -53,6 +53,9 @@ The backend is an Express.js server in TypeScript orchestrating the NDR pipeline
 - **Enter House Mode**: Super admin can click "Enter House" on any tenant from Management → Tenants. This sets a client-side viewing context (`HouseModeContext`) and appends `?view_as=<tenant_id>` to all `/api/my/*` calls. Backend enforces `super_admin` role before honoring `view_as`. Amber banner shows "You are viewing as [Tenant Name] — House Mode" with a "Return to City View" button.
 - **Tool Belt** (`/tool-belt`): Super admin-only page for installing cable boxes (integration placeholders). 4 cards: OneDrive/M365, AWS Account, Laptop/Mobile Agent, Cloud Racks. Each install writes to `ndr-audit-log` table via `POST /api/toolbelt/install`. Integration types are allowlisted server-side.
 - `ndr-audit-log` table: id, timestamp, actor_email, actor_role, tenant_id, action, details, created_at. Logs all toolbelt install actions.
+- **Profile page** (`/profile`): Shows user email, org name, role. Password change form calls `POST /auth/change-password`. Sidebar footer shows user email + clickable link to profile.
+- **OrgDropdown**: Shows "Apex NDR (Sandbox)" and user's org name (from `org_name` field, fallback to tenant_id regex). "+ Organization" button removed — orgs are created at registration.
+- `org_name` field added to verify-otp user response from `ndr-tenants.name`.
 
 **Production Readiness:**
 - Terraform configurations for OpenSearch, ECR, and App Runner are defined.
