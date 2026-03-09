@@ -23,7 +23,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "high",
     iocTags: ["brute-force", "ssh", "failed-auth", "credential-stuffing"],
     description: "Multiple failed SSH authentication attempts from a single source IP within a short time window, indicating a brute force attack against SSH services.",
-    rawText: "event.dataset:zeek.conn AND destination.port:22 AND event.outcome:failure AND count > 10 within 60s",
+    rawText: "event.dataset:veltroy.conn AND destination.port:22 AND event.outcome:failure AND count > 10 within 60s",
   },
   {
     name: "DNS Tunneling",
@@ -32,7 +32,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "critical",
     iocTags: ["dns-tunnel", "c2", "exfiltration", "encoded-payload"],
     description: "Unusually long DNS queries or high-frequency DNS requests to a single domain, indicating potential data exfiltration via DNS tunneling.",
-    rawText: "event.dataset:zeek.dns AND dns.question.name:*.darkops.* AND network.bytes > 500 within 30s",
+    rawText: "event.dataset:veltroy.dns AND dns.question.name:*.darkops.* AND network.bytes > 500 within 30s",
   },
   {
     name: "Lateral Movement via RDP",
@@ -41,7 +41,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "high",
     iocTags: ["rdp", "lateral-movement", "internal-pivot", "remote-desktop"],
     description: "Internal host initiating RDP connections to multiple internal destinations, suggesting lateral movement using compromised credentials.",
-    rawText: "event.dataset:zeek.conn AND destination.port:3389 AND network.direction:internal AND unique_dsts > 3 within 300s",
+    rawText: "event.dataset:veltroy.conn AND destination.port:3389 AND network.direction:internal AND unique_dsts > 3 within 300s",
   },
   {
     name: "Port Scan Activity",
@@ -50,7 +50,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "medium",
     iocTags: ["port-scan", "reconnaissance", "enumeration", "nmap"],
     description: "Single source IP connecting to many distinct destination ports on the same host, characteristic of a port scanning reconnaissance operation.",
-    rawText: "event.dataset:zeek.conn AND source.ip:same AND unique_dst_ports > 50 within 120s",
+    rawText: "event.dataset:veltroy.conn AND source.ip:same AND unique_dst_ports > 50 within 120s",
   },
   {
     name: "Data Exfiltration via HTTP",
@@ -59,7 +59,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "critical",
     iocTags: ["exfiltration", "http", "large-upload", "data-theft"],
     description: "Large outbound HTTP POST/PUT requests to external IPs, potentially exfiltrating sensitive data over standard web protocols.",
-    rawText: "event.dataset:zeek.http AND http.request.method:(POST OR PUT) AND network.direction:egress AND source.bytes > 10485760",
+    rawText: "event.dataset:veltroy.http AND http.request.method:(POST OR PUT) AND network.direction:egress AND source.bytes > 10485760",
   },
   {
     name: "C2 Beacon Pattern",
@@ -68,7 +68,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "critical",
     iocTags: ["c2-beacon", "periodic", "callback", "malware"],
     description: "Regular periodic HTTP/HTTPS connections to external IPs with consistent intervals, characteristic of command and control beacon behavior.",
-    rawText: "event.dataset:zeek.conn AND network.direction:egress AND interval_stddev < 5s AND connection_count > 20 within 3600s",
+    rawText: "event.dataset:veltroy.conn AND network.direction:egress AND interval_stddev < 5s AND connection_count > 20 within 3600s",
   },
   {
     name: "Privilege Escalation via Service Install",
@@ -113,7 +113,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "high",
     iocTags: ["dga", "domain-generation", "c2", "malware"],
     description: "DNS queries to domains matching domain generation algorithm patterns — high entropy, random-looking domain names typical of malware C2 infrastructure.",
-    rawText: "event.dataset:zeek.dns AND dns.question.name:entropy > 3.5 AND dns.response_code:NXDOMAIN AND count > 5 within 60s",
+    rawText: "event.dataset:veltroy.dns AND dns.question.name:entropy > 3.5 AND dns.response_code:NXDOMAIN AND count > 5 within 60s",
   },
   {
     name: "Internal Reconnaissance via SMB",
@@ -122,7 +122,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "medium",
     iocTags: ["smb", "share-enum", "discovery", "internal"],
     description: "Host connecting to SMB shares on multiple internal systems, potentially enumerating network shares for valuable data or lateral movement targets.",
-    rawText: "event.dataset:zeek.conn AND destination.port:445 AND network.direction:internal AND unique_dsts > 5 within 600s",
+    rawText: "event.dataset:veltroy.conn AND destination.port:445 AND network.direction:internal AND unique_dsts > 5 within 600s",
   },
   {
     name: "Unauthorized Root Console Login",
@@ -140,7 +140,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "high",
     iocTags: ["path-traversal", "lfi", "web-attack", "directory-traversal"],
     description: "HTTP requests containing path traversal sequences (../) attempting to access files outside the web root, indicating a web application exploitation attempt.",
-    rawText: "event.dataset:zeek.http AND url.path:*../* AND http.response.status_code:(200 OR 500)",
+    rawText: "event.dataset:veltroy.http AND url.path:*../* AND http.response.status_code:(200 OR 500)",
   },
   {
     name: "Encrypted Channel on Non-Standard Port",
@@ -149,7 +149,7 @@ const ATTACK_PATTERN_SEEDS: Array<{
     severity: "medium",
     iocTags: ["encrypted", "non-standard-port", "c2", "evasion"],
     description: "TLS/SSL traffic detected on non-standard ports (not 443/8443), potentially indicating encrypted C2 communications attempting to evade detection.",
-    rawText: "event.dataset:zeek.conn AND network.protocol:tcp AND destination.port NOT IN (443,8443) AND tls:true",
+    rawText: "event.dataset:veltroy.conn AND network.protocol:tcp AND destination.port NOT IN (443,8443) AND tls:true",
   },
 ];
 

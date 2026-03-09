@@ -81,7 +81,7 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold tracking-tight" data-testid="text-app-title">
-              NDR Platform
+              Veltroy NDR
             </span>
             <span className="text-[10px] text-muted-foreground font-mono">
               Phase Gate 0

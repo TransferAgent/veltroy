@@ -4,7 +4,7 @@ export const ECS_VERSION = "8.11.0";
 export const NDR_BLUEPRINT_VER = "v1.2";
 
 export const ecsDatasetEnum = z.enum([
-  "zeek.conn", "zeek.dns", "zeek.http",
+  "veltroy.conn", "veltroy.dns", "veltroy.http",
   "wazuh.linux", "wazuh.windows", "aws.cloudtrail",
   "ndr.correlation", "ndr.response",
 ]);
@@ -134,7 +134,7 @@ export const networkEventSchema = ecsBaseSchema.extend({
     }).optional(),
     version: z.string().optional(),
   }).optional(),
-  zeek: z.object({
+  veltroy: z.object({
     uid: z.string(),
     log_source: z.string(),
   }).optional(),

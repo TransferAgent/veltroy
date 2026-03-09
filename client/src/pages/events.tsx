@@ -62,11 +62,11 @@ function DirectionBadge({ direction }: { direction: string }) {
 }
 
 function DatasetBadge({ dataset }: { dataset: string }) {
-  const label = dataset.replace("zeek.", "");
+  const label = dataset.replace("veltroy.", "");
   const colors: Record<string, string> = {
-    "zeek.conn": "hsl(var(--chart-1))",
-    "zeek.dns": "hsl(var(--chart-2))",
-    "zeek.http": "hsl(var(--chart-4))",
+    "veltroy.conn": "hsl(var(--chart-1))",
+    "veltroy.dns": "hsl(var(--chart-2))",
+    "veltroy.http": "hsl(var(--chart-4))",
   };
   return (
     <Badge
@@ -279,9 +279,9 @@ export default function Events() {
 
   const allEvents = events || [];
 
-  const connEvents = allEvents.filter((e) => e.event.dataset === "zeek.conn");
-  const dnsEvents = allEvents.filter((e) => e.event.dataset === "zeek.dns");
-  const httpEvents = allEvents.filter((e) => e.event.dataset === "zeek.http");
+  const connEvents = allEvents.filter((e) => e.event.dataset === "veltroy.conn");
+  const dnsEvents = allEvents.filter((e) => e.event.dataset === "veltroy.dns");
+  const httpEvents = allEvents.filter((e) => e.event.dataset === "veltroy.http");
 
   const applyFilters = (list: NetworkEvent[]) =>
     list.filter((event) => {
@@ -321,7 +321,7 @@ export default function Events() {
             Network Events
           </h1>
           <p className="text-xs text-muted-foreground">
-            ECS 8.11.0 compliant packet metadata — Engineer 1 (Zeek {"\u2192"} ECS Rewriter)
+            ECS 8.11.0 compliant packet metadata — Engineer 1 (Veltroy {"\u2192"} ECS Rewriter)
           </p>
         </div>
         <div className="flex items-center gap-1.5">

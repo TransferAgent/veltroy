@@ -3,9 +3,9 @@ import { createHash } from "crypto";
 import type { NetworkEvent } from "@shared/schema";
 import { ECS_VERSION, NDR_BLUEPRINT_VER } from "@shared/schema";
 
-const ECS_DATASET_CONN = "zeek.conn";
-const ECS_DATASET_DNS = "zeek.dns";
-const ECS_DATASET_HTTP = "zeek.http";
+const ECS_DATASET_CONN = "veltroy.conn";
+const ECS_DATASET_DNS = "veltroy.dns";
+const ECS_DATASET_HTTP = "veltroy.http";
 
 const COUNTRIES = [
   "United States", "Russia", "China", "Germany", "Brazil",
@@ -135,7 +135,7 @@ function computeCommunityId(
   return `1:${hash}`;
 }
 
-function zeekUid(): string {
+function veltroyUid(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let uid = "C";
   for (let i = 0; i < 17; i++) {
@@ -162,7 +162,7 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
   const proto = randItem(CONN_PROTOCOLS);
   const severity = isAlert ? randInt(40, 100) : randInt(0, 30);
   const now = new Date().toISOString();
-  const uid = zeekUid();
+  const uid = veltroyUid();
   const eventId = randomUUID();
 
   const direction: "ingress" | "egress" | "internal" =
@@ -180,7 +180,7 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
 
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
-    agent: { name: "zeek", type: "zeek", version: "6.0.4" },
+    agent: { name: "veltroy", type: "veltroy", version: "6.0.4" },
     observer: OBSERVER,
     id: eventId,
     "@timestamp": now,
@@ -191,7 +191,7 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
       type: ["connection"],
       outcome: isAlert ? randItem(["success", "failure"] as const) : "success",
       severity,
-      module: "zeek",
+      module: "veltroy",
       dataset: ECS_DATASET_CONN,
       created: now,
       duration,
@@ -229,7 +229,7 @@ export function generateConnLog(forceAlert = false): NetworkEvent {
       sensor_id: "ndr-sensor-01",
       pipeline_version: NDR_BLUEPRINT_VER,
     },
-    zeek: {
+    veltroy: {
       uid,
       log_source: "conn.log",
     },
@@ -254,7 +254,7 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
   const srcPort = randInt(1024, 65535);
   const severity = isSuspicious ? randInt(50, 90) : randInt(0, 20);
   const now = new Date().toISOString();
-  const uid = zeekUid();
+  const uid = veltroyUid();
   const eventId = randomUUID();
   const queryType = randItem(DNS_QUERY_TYPES);
   const domain = isSuspicious ? randItem(DNS_DOMAINS_SUSPICIOUS) : randItem(DNS_DOMAINS_NORMAL);
@@ -267,7 +267,7 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
 
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
-    agent: { name: "zeek", type: "zeek", version: "6.0.4" },
+    agent: { name: "veltroy", type: "veltroy", version: "6.0.4" },
     observer: OBSERVER,
     id: eventId,
     "@timestamp": now,
@@ -278,7 +278,7 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
       type: ["protocol"],
       outcome: responseCode === "NOERROR" ? "success" : "failure",
       severity,
-      module: "zeek",
+      module: "veltroy",
       dataset: ECS_DATASET_DNS,
       created: now,
       duration: randInt(1000, 50000000),
@@ -327,7 +327,7 @@ export function generateDnsLog(forceAlert = false): NetworkEvent {
         }],
       } : {}),
     },
-    zeek: {
+    veltroy: {
       uid,
       log_source: "dns.log",
     },
@@ -353,7 +353,7 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
   const dstPort = randItem([80, 443, 8080, 8443, 3000]);
   const severity = isSuspicious ? randInt(40, 95) : randInt(0, 20);
   const now = new Date().toISOString();
-  const uid = zeekUid();
+  const uid = veltroyUid();
   const eventId = randomUUID();
   const method = isSuspicious ? randItem(["POST", "PUT", "DELETE"]) : randItem(HTTP_METHODS);
   const path = isSuspicious ? randItem(HTTP_PATHS_SUSPICIOUS) : randItem(HTTP_PATHS_NORMAL);
@@ -372,7 +372,7 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
 
   return {
     ecs: { version: ECS_VERSION as typeof ECS_VERSION },
-    agent: { name: "zeek", type: "zeek", version: "6.0.4" },
+    agent: { name: "veltroy", type: "veltroy", version: "6.0.4" },
     observer: OBSERVER,
     id: eventId,
     "@timestamp": now,
@@ -383,7 +383,7 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
       type: ["access"],
       outcome: statusCode < 400 ? "success" : "failure",
       severity,
-      module: "zeek",
+      module: "veltroy",
       dataset: ECS_DATASET_HTTP,
       created: now,
       duration: randInt(5000, 120000000),
@@ -438,7 +438,7 @@ export function generateHttpLog(forceAlert = false): NetworkEvent {
       },
       version: randItem(["1.1", "2.0"]),
     },
-    zeek: {
+    veltroy: {
       uid,
       log_source: "http.log",
     },

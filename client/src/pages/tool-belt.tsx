@@ -39,7 +39,7 @@ const integrationCards = [
   {
     type: "endpoint_agent",
     label: "Install Laptop / Mobile Agent",
-    description: "Deploy lightweight Zeek sensor or Wazuh agent for endpoint NDR coverage and lateral movement detection.",
+    description: "Deploy lightweight Veltroy sensor or Wazuh agent for endpoint NDR coverage and lateral movement detection.",
     icon: Monitor,
     color: "text-green-400",
     bgColor: "bg-green-500/10",

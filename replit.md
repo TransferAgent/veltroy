@@ -12,6 +12,7 @@ Key capabilities include:
 The project aims to establish a robust, AI-powered security platform capable of rapid threat neutralization, providing a significant advantage in defending against sophisticated cyber attacks.
 
 ## User Preferences
+- **Brand**: Veltroy NDR (sidebar title, log sources, all user-facing references). All former "Zeek" labels replaced with "Veltroy".
 - **PLATFORM_VERSION=v1.2** — no version beyond v1.2 has been authorized.
 - Do NOT modify index.css; use tailwind.config.ts for design tokens.
 - The app starts in dark mode.

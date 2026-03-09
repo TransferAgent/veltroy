@@ -407,9 +407,9 @@ export class NDRPipeline {
     }));
 
     const logSourceBreakdown = [
-      { source: "zeek.conn", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.conn").length },
-      { source: "zeek.dns", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.dns").length },
-      { source: "zeek.http", count: this.networkEvents.filter((e) => e.event.dataset === "zeek.http").length },
+      { source: "veltroy.conn", count: this.networkEvents.filter((e) => e.event.dataset === "veltroy.conn").length },
+      { source: "veltroy.dns", count: this.networkEvents.filter((e) => e.event.dataset === "veltroy.dns").length },
+      { source: "veltroy.http", count: this.networkEvents.filter((e) => e.event.dataset === "veltroy.http").length },
     ];
 
     const identitySourceBreakdown = [

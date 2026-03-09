@@ -248,9 +248,9 @@ function SeverityChart({ data }: { data: { range: string; count: number }[] }) {
 }
 
 const logSourceColors: Record<string, string> = {
-  "zeek.conn": "hsl(var(--chart-1))",
-  "zeek.dns": "hsl(var(--chart-2))",
-  "zeek.http": "hsl(var(--chart-4))",
+  "veltroy.conn": "hsl(var(--chart-1))",
+  "veltroy.dns": "hsl(var(--chart-2))",
+  "veltroy.http": "hsl(var(--chart-4))",
 };
 
 function LogSourceChart({ data }: { data: { source: string; count: number }[] }) {
@@ -260,7 +260,7 @@ function LogSourceChart({ data }: { data: { source: string; count: number }[] })
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-1">
           <CardTitle className="text-sm font-medium">
-            Zeek Log Sources
+            Veltroy Log Sources
           </CardTitle>
           <Badge variant="secondary" className="text-[10px] font-mono">
             Blueprint v1.2
