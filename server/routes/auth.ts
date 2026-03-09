@@ -110,16 +110,9 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       console.error(`[auth/register] Seed script error (non-fatal):`, seedErr);
     }
 
-    try {
-      const tenantSeedScript = path.join(process.cwd(), "scripts", "seed_tenant_starter_data.py");
-      const tenantSeedOutput = execSync(`python3 "${tenantSeedScript}" --tenant_id="${tenantId}"`, {
-        timeout: 30000,
-        encoding: "utf-8",
-      });
-      console.log(`[auth/register] Tenant starter seed output:\n${tenantSeedOutput}`);
-    } catch (tenantSeedErr) {
-      console.error(`[auth/register] Tenant starter seed error (non-fatal):`, tenantSeedErr);
-    }
+    // Tenant starter seed removed — My House starts empty by design.
+    // Data flows in only when real integrations are connected.
+    // Script remains at scripts/seed_tenant_starter_data.py for manual use.
 
     const SKIP_2FA = process.env.SKIP_2FA === 'true';
 

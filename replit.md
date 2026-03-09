@@ -47,8 +47,9 @@ The backend is an Express.js server in TypeScript orchestrating the NDR pipeline
 - `server/routes/tenantDashboard.ts` exposes `/api/my/events`, `/api/my/threats`, `/api/my/stats`, `/api/my/identity`, `/api/my/correlations` — all JWT-authenticated, filtered by `ndr_tenant_id`.
 - 4 new "My Organization" pages: `my-dashboard.tsx`, `my-threats.tsx`, `my-events.tsx`, `my-identity.tsx`.
 - Sidebar has additive "My Organization" section visible to all authenticated users.
-- `scripts/seed_tenant_starter_data.py` seeds 8 rows (3 network, 3 identity, 2 correlated) per tenant on registration.
-- City View (existing pages) = `tenant_id='global'` data, untouched. My Organization = tenant-scoped data.
+- `scripts/seed_tenant_starter_data.py` exists but is NO LONGER called during registration. My House starts empty by design — data flows in only when real integrations are connected. Script remains for manual/testing use.
+- City View (existing pages) = `tenant_id='global'` seeded data, the "model home" showroom. My Organization = tenant-scoped data, starts empty until integrations are plugged in.
+- All four My House pages have graceful empty states (icons + messages) when no data exists.
 
 **Production Readiness:**
 - Terraform configurations for OpenSearch, ECR, and App Runner are defined.
