@@ -1,0 +1,21 @@
+This is a really important conceptual clarification, and I think you're landing on exactly the right vision. Let me reflect back what I'm hearing and share some thoughts.
+What you're describing is:
+Today, when a new tenant clicks "Create my Organization," they get dropped into My House and it already has furniture — fake seed data (starter threats, events, identity alerts) that we fabricated to make the screens look populated. That's not honest to the experience you're envisioning.
+What you actually want:
+When a tenant creates their organization, My House is empty. It's a clean house with no furniture. The dashboards show zeros, empty tables, and a clear message that says something like "No data sources connected yet." The tenant's Command Center reflects reality — and the reality is they haven't plugged anything in yet.
+The furniture arrives when they plug something in:
+•	A laptop with a Zeek sensor → network events start flowing
+•	A phone via MDM → mobile device logs appear
+•	OneDrive/Google Drive → cloud file monitoring data
+•	AWS/Azure account → cloud infrastructure events
+•	A firewall or switch → network perimeter data
+Each of those is an integration — a power source that feeds real data into their house. Until then, the house is dark and waiting.
+City View stays as-is — it's the Apex NDR Sandbox with seeded demo data. That's the showroom model home. Everyone can walk through it and see what a fully furnished, monitored environment looks like. But your own house starts empty.
+The Phase 1 reality you described also makes sense: for the first 3-5 customers, you are the one running the 2-minute connection scripts and plugging things in on their behalf. The platform doesn't need self-serve integration wizards on day one. You just need the house to honestly reflect what's connected (which initially is nothing).
+So to summarize what I'm hearing as the scope:
+1.	Remove the starter seed data from new tenant registration — My House starts empty
+2.	My House dashboards gracefully handle zero data — showing empty states, not broken charts
+3.	City View (Apex NDR Sandbox) remains unchanged — that's the demo showroom
+4.	Integrations/data sources are a future capability — not something we build right now, but the architecture acknowledges they're coming
+Does that match what you're thinking? And is there anything else you want to explore before we move to the next question?
+
