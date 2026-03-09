@@ -159,6 +159,8 @@ router.post("/auth/register", async (req: Request, res: Response) => {
 
     const pendingToken = generatePendingToken(email);
 
+    const hasSes = !!(process.env.AWS_SES_REGION && process.env.AWS_SES_FROM_EMAIL && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+
     return res.status(201).json({
       tenant_id: tenantId,
       email,
@@ -166,6 +168,7 @@ router.post("/auth/register", async (req: Request, res: Response) => {
       requiresMfa: true,
       maskedEmail: maskEmail(email),
       pendingToken,
+      ...(!hasSes && { lab_code: code }),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Registration failed";
@@ -237,10 +240,13 @@ router.post("/auth/login", async (req: Request, res: Response) => {
 
     const pendingToken = generatePendingToken(user.email);
 
+    const hasSes = !!(process.env.AWS_SES_REGION && process.env.AWS_SES_FROM_EMAIL && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+
     return res.status(200).json({
       requiresMfa: true,
       maskedEmail: maskEmail(user.email),
       pendingToken,
+      ...(!hasSes && { lab_code: code }),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Login failed";
@@ -344,9 +350,12 @@ router.post("/auth/resend-otp", async (req: Request, res: Response) => {
     const code = await createVerificationCode(String(user.id), email);
     await sendVerificationCode(email, code);
 
+    const hasSes = !!(process.env.AWS_SES_REGION && process.env.AWS_SES_FROM_EMAIL && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+
     return res.status(200).json({
       message: "New code sent. Check Replit Logs.",
       maskedEmail: maskEmail(email),
+      ...(!hasSes && { lab_code: code }),
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Resend failed";

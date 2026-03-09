@@ -23,6 +23,7 @@ export default function LoginPage() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpReset, setOtpReset] = useState(0);
   const [resendMessage, setResendMessage] = useState("");
+  const [labCode, setLabCode] = useState("");
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -66,6 +67,7 @@ export default function LoginPage() {
       if (data.requiresMfa) {
         setPendingToken(data.pendingToken);
         setMaskedEmail(data.maskedEmail);
+        setLabCode(data.lab_code || '');
         setScreen("otp");
         return;
       }
@@ -109,6 +111,7 @@ export default function LoginPage() {
       if (data.requiresMfa) {
         setPendingToken(data.pendingToken);
         setMaskedEmail(data.maskedEmail);
+        setLabCode(data.lab_code || '');
         setScreen("otp");
         return;
       }
@@ -171,6 +174,7 @@ export default function LoginPage() {
         setOtpError(data.error || "Resend failed");
         return;
       }
+      if (data.lab_code) setLabCode(data.lab_code);
       setResendMessage("New code sent. Check Replit Logs.");
       setOtpReset((r) => r + 1);
     } catch {
@@ -265,6 +269,25 @@ export default function LoginPage() {
             </p>
           )}
 
+          {labCode && (
+            <div style={{
+              background: 'rgba(99,179,237,0.08)',
+              border: '1px solid rgba(99,179,237,0.25)',
+              borderRadius: 8,
+              padding: '10px 16px',
+              margin: '0 0 12px 0',
+              textAlign: 'center',
+            }} data-testid="lab-code-display">
+              <p style={{ color: '#A0AEC0', fontSize: '0.7rem', margin: '0 0 4px 0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                Lab Mode — Your Code
+              </p>
+              <p style={{ color: '#63B3ED', fontSize: '1.5rem', fontWeight: 700, fontFamily: 'monospace', margin: 0, letterSpacing: 6 }}
+                 data-testid="text-lab-code">
+                {labCode}
+              </p>
+            </div>
+          )}
+
           {resendMessage && (
             <p style={{ color: '#48BB78', fontSize: '0.8rem', textAlign: 'center', margin: '0 0 12px 0' }}
                data-testid="text-resend-success">
@@ -306,6 +329,7 @@ export default function LoginPage() {
                 setMaskedEmail('');
                 setOtpError('');
                 setResendMessage('');
+                setLabCode('');
               }}
               data-testid="link-back-to-login"
             >
@@ -314,7 +338,7 @@ export default function LoginPage() {
           </div>
 
           <p style={{ color: '#4A5568', fontSize: '0.7rem', textAlign: 'center', marginTop: '1rem' }}>
-            Code expires in 10 minutes. Check Replit Logs for delivery.
+            {labCode ? 'Code expires in 10 minutes. Enter your code above.' : 'Code expires in 10 minutes. Check Replit Logs for delivery.'}
           </p>
         </div>
       </div>
