@@ -1,0 +1,64 @@
+Tenant Power Sources – What Each House Can Plug In
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Device / SourceHow the Tenant Plugs It In (2-minute setup)What Power / Protection They GetTenant Isolation Guarantee (No Cross-House Leak)Laptop / WorkstationInstall lightweight Zeek sensor (single binary, no reboot) on the laptop or via endpoint agent (Wazuh)Full NDR: lateral movement detection, C2 beacon blocking, host cardinality spikes, automatic isolation (KL-001)All logs stamped with tenant_id at ingestion. Queries filtered by tenant_id in every table.Cell Phone / MobileTenant grants read-only access to Microsoft Intune / Jamf / Google Workspace (one-click OAuth)Identity threat detection (off-hours logins, impossible travel, brute-force), device compliance checksMobile events routed through tenant-specific Wazuh/CloudTrail pipeline. Never visible to other tenants.On-Prem NetworkMirror port / SPAN session to Zeek sensor (virtual tap or physical appliance)Complete network visibility: port scans, ransomware beacons, encrypted C2, Suricata confirmationZeek JSON output immediately tagged with tenant_id before it hits the grid bus.Cloud (AWS/Azure/GCP)Tenant adds a read-only IAM role (AWS) or service principal (Azure) — no keys stored on your sideCloudTrail / Azure AD / GCP audit log monitoring, IAM privilege escalation auto-kill (KL-002), OneDrive/SharePoint threat detectionCloud logs ingested with tenant_id filter at the ingestion Lambda / Logstash stage.Server Racks / VMsDeploy Wazuh agent on each VM or hypervisor (one-click script)Host-level identity, file integrity monitoring, ransomware encryption detection, auto-snapshot (KL-004)Wazuh agent config includes tenant_id tag at install time. All events filtered at database level.OneDrive / M365Tenant clicks “Connect OneDrive” in their My House dashboard (delegated Graph API consent)Unusual file sharing, malware upload detection, external sharing blocks, audit log correlationMicrosoft Graph responses stamped with tenant_id before storage. Tenant-scoped endpoints only return their data.
+Key Rule of the Grid
+Every single device above gets its own private power meter (tenant_id) the moment it connects.
+The AI repair crew (your 4 Agents) works inside that house only.
+You (super_admin) can still see the city-wide view, but no tenant can ever see another tenant’s laptop, phone, OneDrive, or rack.
+Are You Going to Be the “Smart Guy” Who Handles Integrations and Glue?
+Short answer: YES — but only for the first 5–10 customers.
+After that, NO — the platform becomes self-serve and you step back to pure grid operator.
+Here’s exactly how it plays out:
+Phase 1 (Now – Next 30–60 days)
+You are the smart guy.
+
+You personally help the first 3–5 pilot tenants plug in their OneDrive, AWS account, or laptop.
+You run the 2-minute connection scripts.
+You verify the tenant sees only their house.
+This is intentional: you learn real-world edge cases and make the onboarding bulletproof.
