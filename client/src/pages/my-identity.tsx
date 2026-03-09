@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users } from "lucide-react";
 import { getToken, getCurrentUser } from "@/lib/auth";
+import { useHouseMode } from "@/context/HouseModeContext";
 
 function fetchWithAuth(url: string) {
   return fetch(url, {
@@ -12,6 +13,12 @@ function fetchWithAuth(url: string) {
     if (!r.ok) throw new Error("Failed to fetch");
     return r.json();
   });
+}
+
+function appendViewAs(url: string, tenantId: string | null): string {
+  if (!tenantId) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}view_as=${encodeURIComponent(tenantId)}`;
 }
 
 function actionColor(action: string | null) {
@@ -24,13 +31,19 @@ function actionColor(action: string | null) {
 
 export default function MyIdentity() {
   const user = getCurrentUser();
-  const orgDisplayName = user?.tenant_id
-    ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : "My Organization";
+  const { isHouseMode, activeTenantId, activeTenantName } = useHouseMode();
+
+  const orgDisplayName = isHouseMode
+    ? (activeTenantName || "Tenant")
+    : user?.tenant_id
+      ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : "My Organization";
+
+  const viewAs = isHouseMode ? activeTenantId : null;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/my/identity"],
-    queryFn: () => fetchWithAuth("/api/my/identity?limit=100"),
+    queryKey: ["/api/my/identity", viewAs],
+    queryFn: () => fetchWithAuth(appendViewAs("/api/my/identity?limit=100", viewAs)),
     refetchInterval: 5000,
   });
 

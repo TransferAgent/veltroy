@@ -53,7 +53,10 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Home,
 } from "lucide-react";
+import { useHouseMode } from "@/context/HouseModeContext";
+import { useLocation } from "wouter";
 
 interface TenantUser {
   id: number;
@@ -91,6 +94,8 @@ function authHeaders() {
 
 function SuperAdminView() {
   const { toast } = useToast();
+  const { enterHouse } = useHouseMode();
+  const [, setLocation] = useLocation();
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<TenantUser | null>(null);
   const [editTenant, setEditTenant] = useState<TenantData | null>(null);
@@ -268,6 +273,21 @@ function SuperAdminView() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {tenant.tenant_id !== "ndr-platform-core" && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                        onClick={() => {
+                          enterHouse(tenant.tenant_id, tenant.name);
+                          setLocation("/my/dashboard");
+                        }}
+                        title="Enter House"
+                        data-testid={`button-enter-house-${tenant.tenant_id}`}
+                      >
+                        <Home className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     {tenant.is_trial === 1 && (
                       <Button
                         size="icon"

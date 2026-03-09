@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Users,
   Building2,
+  Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -48,6 +49,10 @@ const navItems = [
 
 const adminNavItems = [
   { title: "Tenants", url: "/tenants", icon: Users },
+] as const;
+
+const superAdminNavItems = [
+  { title: "Tool Belt", url: "/tool-belt", icon: Wrench },
 ] as const;
 
 const myOrgNavItems = [
@@ -166,6 +171,27 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      data-active={location === item.url}
+                      className="data-[active=true]:bg-sidebar-accent"
+                    >
+                      <a
+                        href={item.url}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setLocation(item.url);
+                        }}
+                        data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                {currentUser?.role === "super_admin" && superAdminNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild

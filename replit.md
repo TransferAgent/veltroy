@@ -50,6 +50,9 @@ The backend is an Express.js server in TypeScript orchestrating the NDR pipeline
 - `scripts/seed_tenant_starter_data.py` exists but is NO LONGER called during registration. My House starts empty by design — data flows in only when real integrations are connected. Script remains for manual/testing use.
 - City View (existing pages) = `tenant_id='global'` seeded data, the "model home" showroom. My Organization = tenant-scoped data, starts empty until integrations are plugged in.
 - All four My House pages have graceful empty states (icons + messages) when no data exists.
+- **Enter House Mode**: Super admin can click "Enter House" on any tenant from Management → Tenants. This sets a client-side viewing context (`HouseModeContext`) and appends `?view_as=<tenant_id>` to all `/api/my/*` calls. Backend enforces `super_admin` role before honoring `view_as`. Amber banner shows "You are viewing as [Tenant Name] — House Mode" with a "Return to City View" button.
+- **Tool Belt** (`/tool-belt`): Super admin-only page for installing cable boxes (integration placeholders). 4 cards: OneDrive/M365, AWS Account, Laptop/Mobile Agent, Cloud Racks. Each install writes to `ndr-audit-log` table via `POST /api/toolbelt/install`. Integration types are allowlisted server-side.
+- `ndr-audit-log` table: id, timestamp, actor_email, actor_role, tenant_id, action, details, created_at. Logs all toolbelt install actions.
 
 **Production Readiness:**
 - Terraform configurations for OpenSearch, ECR, and App Runner are defined.

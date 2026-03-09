@@ -6,8 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
+import { HouseModeProvider, useHouseMode } from "@/context/HouseModeContext";
 import { Button } from "@/components/ui/button";
-import { Sun, Moon, Eye } from "lucide-react";
+import { Sun, Moon, Eye, ArrowLeft } from "lucide-react";
 import { isAuthenticated, getCurrentUser } from "@/lib/auth";
 import { OrgDropdown } from "@/components/OrgDropdown";
 import NotFound from "@/pages/not-found";
@@ -29,6 +30,7 @@ import MyDashboard from "@/pages/my-dashboard";
 import MyThreats from "@/pages/my-threats";
 import MyEvents from "@/pages/my-events";
 import MyIdentity from "@/pages/my-identity";
+import ToolBelt from "@/pages/tool-belt";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -54,6 +56,37 @@ function ReadOnlyBadge() {
     >
       <Eye className="h-3 w-3" />
       Read Only
+    </div>
+  );
+}
+
+function HouseModeBanner() {
+  const { isHouseMode, activeTenantName, exitHouse } = useHouseMode();
+  const [, setLocation] = useLocation();
+
+  if (!isHouseMode) return null;
+
+  return (
+    <div
+      className="flex items-center justify-between px-4 py-2 bg-amber-500/15 border-b border-amber-500/30"
+      data-testid="banner-house-mode"
+    >
+      <span className="text-sm font-medium text-amber-400" data-testid="text-house-mode-tenant">
+        You are viewing as <span className="font-bold">{activeTenantName}</span> — House Mode
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+        onClick={() => {
+          exitHouse();
+          setLocation("/tenants");
+        }}
+        data-testid="button-return-city-view"
+      >
+        <ArrowLeft className="h-3 w-3 mr-1" />
+        Return to City View
+      </Button>
     </div>
   );
 }
@@ -85,6 +118,7 @@ function AuthRouter() {
       <Route path="/my/threats" component={MyThreats} />
       <Route path="/my/events" component={MyEvents} />
       <Route path="/my/identity" component={MyIdentity} />
+      <Route path="/tool-belt" component={ToolBelt} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -110,6 +144,7 @@ function AppLayout() {
                 <ThemeToggle />
               </div>
             </header>
+            <HouseModeBanner />
             <main className="flex-1 overflow-hidden">
               <AuthRouter />
             </main>
@@ -125,13 +160,15 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <Switch>
-            <Route path="/login" component={LoginPage} />
-            <Route>
-              <AppLayout />
-            </Route>
-          </Switch>
-          <Toaster />
+          <HouseModeProvider>
+            <Switch>
+              <Route path="/login" component={LoginPage} />
+              <Route>
+                <AppLayout />
+              </Route>
+            </Switch>
+            <Toaster />
+          </HouseModeProvider>
         </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>

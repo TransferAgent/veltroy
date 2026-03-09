@@ -7,6 +7,7 @@ import ndrProxyRouter from "./routes/ndrProxy";
 import authRouter from "./routes/auth";
 import adminRouter from "./routes/admin";
 import tenantDashboardRouter from "./routes/tenantDashboard";
+import toolbeltRouter from "./routes/toolbelt";
 
 function isTrialToken(req: any): boolean {
   try {
@@ -31,6 +32,7 @@ export async function registerRoutes(
   app.use(authRouter);
   app.use(adminRouter);
   app.use(tenantDashboardRouter);
+  app.use(toolbeltRouter);
 
   app.get("/api/dashboard/stats", (_req, res) => {
     res.json(pipeline.getDashboardStats());

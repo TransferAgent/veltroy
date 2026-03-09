@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, Activity, Users, AlertTriangle } from "lucide-react";
 import { getToken, getCurrentUser } from "@/lib/auth";
+import { useHouseMode } from "@/context/HouseModeContext";
 
 function fetchWithAuth(url: string) {
   return fetch(url, {
@@ -14,27 +15,39 @@ function fetchWithAuth(url: string) {
   });
 }
 
+function appendViewAs(url: string, tenantId: string | null): string {
+  if (!tenantId) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}view_as=${encodeURIComponent(tenantId)}`;
+}
+
 export default function MyDashboard() {
   const user = getCurrentUser();
-  const orgDisplayName = user?.tenant_id
-    ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-    : "My Organization";
+  const { isHouseMode, activeTenantId, activeTenantName } = useHouseMode();
+
+  const orgDisplayName = isHouseMode
+    ? (activeTenantName || "Tenant")
+    : user?.tenant_id
+      ? user.tenant_id.replace(/-[a-z0-9]{6}$/, '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : "My Organization";
+
+  const viewAs = isHouseMode ? activeTenantId : null;
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ["/api/my/stats"],
-    queryFn: () => fetchWithAuth("/api/my/stats"),
+    queryKey: ["/api/my/stats", viewAs],
+    queryFn: () => fetchWithAuth(appendViewAs("/api/my/stats", viewAs)),
     refetchInterval: 5000,
   });
 
   const { data: threatsData, isLoading: threatsLoading } = useQuery({
-    queryKey: ["/api/my/threats"],
-    queryFn: () => fetchWithAuth("/api/my/threats?limit=5"),
+    queryKey: ["/api/my/threats", viewAs],
+    queryFn: () => fetchWithAuth(appendViewAs("/api/my/threats?limit=5", viewAs)),
     refetchInterval: 5000,
   });
 
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
-    queryKey: ["/api/my/events"],
-    queryFn: () => fetchWithAuth("/api/my/events?limit=5"),
+    queryKey: ["/api/my/events", viewAs],
+    queryFn: () => fetchWithAuth(appendViewAs("/api/my/events?limit=5", viewAs)),
     refetchInterval: 5000,
   });
 
