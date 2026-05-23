@@ -56,6 +56,10 @@ const superAdminNavItems = [
   { title: "Tool Belt", url: "/tool-belt", icon: Wrench },
 ] as const;
 
+const godModeNavItems = [
+  { title: "God Mode", url: "/god-mode", icon: Crosshair },
+] as const;
+
 const myOrgNavItems = [
   { title: "My Dashboard", url: "/my/dashboard", icon: Building2 },
   { title: "My Network Events", url: "/my/events", icon: Network },
@@ -165,6 +169,37 @@ export function AppSidebar() {
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {currentUser?.role === "super_admin" && (
+          <SidebarGroup>
+            <SidebarGroupLabel>God Mode</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {godModeNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      data-active={location === item.url}
+                      className="data-[active=true]:bg-sidebar-accent"
+                    >
+                      <a
+                        href={item.url}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setLocation(item.url);
+                        }}
+                        data-testid={`link-nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {(currentUser?.role === "super_admin" || currentUser?.is_parent) && (
           <SidebarGroup>

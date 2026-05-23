@@ -32,6 +32,7 @@ import MyEvents from "@/pages/my-events";
 import MyIdentity from "@/pages/my-identity";
 import ToolBelt from "@/pages/tool-belt";
 import ProfilePage from "@/pages/profile";
+import GodModePage from "@/pages/god-mode";
 
 function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -121,6 +122,7 @@ function AuthRouter() {
       <Route path="/my/identity" component={MyIdentity} />
       <Route path="/tool-belt" component={ToolBelt} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/god-mode" component={GodModePage} />
       <Route component={NotFound} />
     </Switch>
   );
