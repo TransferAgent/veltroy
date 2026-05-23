@@ -116,12 +116,7 @@ const PLAYBOOK_MAP: Record<string, string> = {
 
 function authFetch(url: string) {
   return fetch(url, {
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem("ndr_token")}`,
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-    },
-    cache: "no-store",
+    headers: { Authorization: `Bearer ${localStorage.getItem("ndr_token")}` },
   });
 }
 
@@ -129,7 +124,7 @@ export default function GridOperatorView() {
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const { data: overview, isLoading: overviewLoading, error: overviewError, refetch: refetchOverview } = useQuery<GridOverview>({
+  const { data: overview, isLoading: overviewLoading } = useQuery<GridOverview>({
     queryKey: ["/api/ndr/grid/overview", refreshKey],
     queryFn: async () => {
       const res = await authFetch("/api/ndr/grid/overview");
@@ -137,10 +132,6 @@ export default function GridOperatorView() {
       return res.json();
     },
     refetchInterval: 30000,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    retry: 2,
-    retryDelay: 1000,
   });
 
   const { data: feed, isLoading: feedLoading } = useQuery<GridFeed>({
@@ -261,22 +252,6 @@ export default function GridOperatorView() {
                       ticketsLoading={ticketsLoading && expandedTenant === tenant.tenant_id}
                     />
                   ))}
-                  {(!overview || overview.tenants.length === 0) && (
-                    <tr>
-                      <td colSpan={5} className="p-6 text-center text-sm text-muted-foreground" data-testid="transformer-empty">
-                        {overviewError ? (
-                          <div className="space-y-2">
-                            <p className="text-amber-500">Could not load transformer status.</p>
-                            <Button size="sm" variant="outline" onClick={() => refetchOverview()} data-testid="btn-retry-overview">
-                              Retry
-                            </Button>
-                          </div>
-                        ) : (
-                          "No transformers online yet."
-                        )}
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>

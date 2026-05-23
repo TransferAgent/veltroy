@@ -65,9 +65,6 @@ router.get(
   isTrialExpired,
   requireRole(NDR_ROLES.NDR_ADMIN),
   async (req, res) => {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
     try {
       const result = await proxyToFlask("GET", "/v1/grid/overview", null, req.user!.ndr_tenant_id);
       res.status(result.status).json(result.data);
@@ -83,9 +80,6 @@ router.get(
   isTrialExpired,
   requireRole(NDR_ROLES.NDR_ADMIN),
   async (req, res) => {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
     const limit = req.query.limit || 20;
     try {
       const result = await proxyToFlask("GET", `/v1/grid/feed?limit=${limit}`, null, req.user!.ndr_tenant_id);
