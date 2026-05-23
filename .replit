@@ -80,3 +80,6 @@ SUPER_USER_EMAIL = "super@ndr-platform.io"
 SUPER_USER_PASSWORD = "SuperNdr1!"
 DEMO_ADMIN_EMAIL = "admin@ndr-demo.io"
 DEMO_ADMIN_PASSWORD = "NdrAdmin1!"
+
+[agent]
+integrations = ["github:1.0.0"]
