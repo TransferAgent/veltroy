@@ -357,3 +357,4 @@ exec(open('oracle/ndr_phase_gate_0_oracle_v2.py').read())
 ## License
 
 Internal platform prototype. Blueprint v1.2.
+# veltroy
